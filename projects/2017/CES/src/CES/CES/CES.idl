@@ -1,0 +1,51 @@
+// CES.idl : ActiveX 控件项目的类型库源。
+
+// 此文件将由 MIDL 编译器工具处理以
+// 产生类型库(CES.tlb)，该类型库将成为
+// CES.ocx.
+
+#include <olectl.h>
+#include <idispids.h>
+
+[ uuid(9F3CE81A-B84B-4ADF-8A05-02F03AEC63F8), version(1.0),
+  control ]
+library CESLib
+{
+	importlib(STDOLE_TLB);
+
+	//  CCESCtrl 的主调度接口
+	[ 
+		uuid(799CD45C-8E8A-4743-86F3-DA47A583772F)	
+	]
+	dispinterface _DCES
+	{
+		properties:
+		methods:
+
+			[id(DISPID_ABOUTBOX)] void AboutBox();
+	};
+
+	//  CCESCtrl 的事件调度接口
+
+	[ 
+		uuid(730372C9-D823-4353-9C30-23D1E6A456D9)	
+	]
+	dispinterface _DCESEvents
+	{
+		properties:
+			//  事件接口没有任何属性
+
+		methods:
+	};
+
+	//  CCESCtrl 的类信息
+	[
+		uuid(360FB522-FE3E-42CC-B56D-CA767F419987)
+	]
+	coclass CES
+	{
+		[default] dispinterface _DCES;
+		[default, source] dispinterface _DCESEvents;
+	};
+
+};
