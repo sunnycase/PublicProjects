@@ -36,6 +36,7 @@ public:
 	static MFWorkerQueueProviderRef GetProAudio();
 
 	MFWorkerQueueProvider(DWORD taskId, LPCWSTR className, DWORD basePriority);
+	MFWorkerQueueProvider();
 	virtual ~MFWorkerQueueProvider();
 
 	DWORD GetTaskId() const noexcept { return taskId; }

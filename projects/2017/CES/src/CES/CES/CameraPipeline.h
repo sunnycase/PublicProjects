@@ -12,7 +12,7 @@ namespace CES
 		Scanner
 	};
 
-	enum class CamraPipelineOperationKind
+	enum class CameraPipelineOperationKind
 	{
 		// 无
 		None,
@@ -27,33 +27,69 @@ namespace CES
 		// 请求数据
 		RequestData,
 		// 到达结尾
-		EndOfStream
+		EndOfStream,
+		Event
 	};
 
-	class CamraPipelineOperation
+	class CameraPipelineOperation
 	{
 	public:
-		CamraPipelineOperation(CamraPipelineOperationKind kind) noexcept
+		CameraPipelineOperation(CameraPipelineOperationKind kind) noexcept
 			: kind(kind)
 		{
 
 		}
 
-		virtual ~CamraPipelineOperation()
+		virtual ~CameraPipelineOperation()
 		{
 
 		}
 
-		CamraPipelineOperation() noexcept
-			: CamraPipelineOperation(CamraPipelineOperationKind::None)
+		CameraPipelineOperation() noexcept
+			: CameraPipelineOperation(CameraPipelineOperationKind::None)
 		{
 
 		}
 
 		// 获取类型
-		CamraPipelineOperationKind GetKind() const noexcept { return kind; }
+		CameraPipelineOperationKind GetKind() const noexcept { return kind; }
 	private:
-		CamraPipelineOperationKind kind;
+		CameraPipelineOperationKind kind;
+	};
+
+	template<class THandler>
+	class Event
+	{
+		std::shared_ptr<std::vector<std::function<THandler>>> _functions;
+	public:
+		template<class TCallable>
+		void Subscribe(TCallable f)
+		{
+			auto newFuncs = std::make_shared<std::vector<std::function<THandler>>>();
+			auto oldFuncs = std::atomic_load(&_functions);
+			if (oldFuncs)
+			{
+				newFuncs->reserve(oldFuncs->size() + 1);
+				*newFuncs = *oldFuncs;
+			}
+			newFuncs->emplace_back(std::forward<TCallable>(f));
+			std::atomic_store(&_functions, std::move(newFuncs));
+		}
+
+		template<class... Param>
+		void Publish(Param&&... x)
+		{
+			auto oldFuncs = std::atomic_load(&_functions);
+			if (oldFuncs)
+				for (auto f : *oldFuncs) f(std::forward<Param>(x)...);
+		}
+
+		void Publish()
+		{
+			auto oldFuncs = std::atomic_load(&_functions);
+			if (oldFuncs)
+				for (auto f : *oldFuncs) f();
+		}
 	};
 
 	class CameraPipeline : public NS_CORE::WeakReferenceBase<CameraPipeline, WRL::RuntimeClassFlags<WRL::ClassicCom>, IUnknown>
@@ -62,17 +98,24 @@ namespace CES
 		CameraPipeline();
 
 		void OpenCamera(CameraSource source, HWND videohWnd);
+		void Start();
+
+		Event<void()> DeviceReady;
 	private:
 		void CreateDeviceDependendResources();
 		void CreateSession();
 		void ConfigureTopology(IMFTopology* topology, IMFMediaSource* source, HWND videohWnd);
 		void OnMediaSessionEvent(IMFAsyncResult* pAsyncResult);
-		void OnDispatchOperation(CamraPipelineOperation& op);
+		void OnDispatchOperation(std::shared_ptr<CameraPipelineOperation>& op);
+
+		void ProcessMediaSessionEvent(IMFMediaEvent* event);
+		void ProcessStart();
+		void ProcessSessionTopologyStatus(IMFMediaEvent* event);
 	private:
 		WRL::ComPtr<IMFMediaSource> _cameraSource;
 		WRL::ComPtr<IMFMediaSource> _scannerSource;
 		WRL::ComPtr<IMFMediaSession> _mediaSession;
 		WRL::ComPtr<NS_MEDIA::MFAsyncCallbackWithWeakRef<CameraPipeline>> _mediaSessionAsyncCallback;
-		std::shared_ptr<NS_CORE::OperationQueue<CamraPipelineOperation>> _operationQueue;
+		std::shared_ptr<NS_CORE::OperationQueue<std::shared_ptr<CameraPipelineOperation>>> _operationQueue;
 	};
 }

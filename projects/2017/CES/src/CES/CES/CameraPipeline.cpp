@@ -5,9 +5,26 @@
 using namespace WRL;
 using namespace CES;
 
+namespace
+{
+	class CamraPipelineMediaEventOperation : public CameraPipelineOperation
+	{
+	public:
+		CamraPipelineMediaEventOperation(IMFMediaEvent* event) noexcept
+			: CameraPipelineOperation(CameraPipelineOperationKind::Event), _event(event)
+		{
+
+		}
+
+		IMFMediaEvent* GetEvent() const noexcept { return _event.Get(); }
+	private:
+		ComPtr<IMFMediaEvent> _event;
+	};
+}
+
 CameraPipeline::CameraPipeline()
-	:_operationQueue(std::make_shared<NS_CORE::OperationQueue<CamraPipelineOperation>>(
-		[weak = AsWeak()](CamraPipelineOperation& op)
+	:_operationQueue(std::make_shared<NS_CORE::OperationQueue<std::shared_ptr<CameraPipelineOperation>>>(
+		[weak = AsWeak()](std::shared_ptr<CameraPipelineOperation>& op)
 {
 	if (auto me = weak.Resolve<CameraPipeline>()) me->OnDispatchOperation(op);
 }))
@@ -28,11 +45,62 @@ void CameraPipeline::OnMediaSessionEvent(IMFAsyncResult * pAsyncResult)
 	ThrowIfFailed(event->GetType(&eventType));
 	if (eventType != MESessionClosed)
 		ThrowIfFailed(_mediaSession->BeginGetEvent(_mediaSessionAsyncCallback.Get(), nullptr));
-	_operationQueue->Enqueue(CamraPipelineOperation{ CamraPipelineOperationKind::None });
+	_operationQueue->Enqueue(std::make_shared<CamraPipelineMediaEventOperation>(event.Get()));
 }
 
-void CameraPipeline::OnDispatchOperation(CamraPipelineOperation & op)
+void CameraPipeline::OnDispatchOperation(std::shared_ptr<CameraPipelineOperation>& op)
 {
+	auto& opRef = *op;
+	switch (opRef.GetKind())
+	{
+	case CameraPipelineOperationKind::Event:
+		ProcessMediaSessionEvent(static_cast<CamraPipelineMediaEventOperation&>(opRef).GetEvent());
+		break;
+	case CameraPipelineOperationKind::Start:
+		ProcessStart();
+		break;
+	default:
+		break;
+	}
+}
+
+void CameraPipeline::ProcessMediaSessionEvent(IMFMediaEvent * event)
+{
+	MediaEventType eventType;
+	ThrowIfFailed(event->GetType(&eventType));
+
+	HRESULT hr;
+	ThrowIfFailed(event->GetStatus(&hr));
+	ThrowIfFailed(hr);
+
+	switch (eventType)
+	{
+	case MESessionTopologyStatus:
+		ProcessSessionTopologyStatus(event);
+		break;
+	default:
+		break;
+	}
+
+}
+
+void CameraPipeline::ProcessStart()
+{
+	auto session = _mediaSession;
+	if (session)
+	{
+		PROPVARIANT varStart;
+		PropVariantInit(&varStart);
+		ThrowIfFailed(session->Start(&GUID_NULL, &varStart));
+	}
+}
+
+void CameraPipeline::ProcessSessionTopologyStatus(IMFMediaEvent * event)
+{
+	UINT32 status;
+	ThrowIfFailed(event->GetUINT32(MF_EVENT_TOPOLOGY_STATUS, &status));
+	if (status == MF_TOPOSTATUS_READY)
+		DeviceReady.Publish();
 }
 
 void CameraPipeline::OpenCamera(CameraSource source, HWND videohWnd)
@@ -45,6 +113,11 @@ void CameraPipeline::OpenCamera(CameraSource source, HWND videohWnd)
 		ThrowAlways(L"摄像头未连接，或驱动未安装。");
 	ConfigureTopology(topology.Get(), mediaSource, videohWnd);
 	ThrowIfFailed(_mediaSession->SetTopology(0, topology.Get()));
+}
+
+void CameraPipeline::Start()
+{
+	_operationQueue->Enqueue(std::make_shared<CameraPipelineOperation>(CameraPipelineOperationKind::Start));
 }
 
 void CameraPipeline::CreateDeviceDependendResources()

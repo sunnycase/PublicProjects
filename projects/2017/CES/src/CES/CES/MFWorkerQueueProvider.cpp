@@ -34,13 +34,21 @@ namespace
 		{
 			Initialize();
 
+#if (WINVER > _WIN32_WINNT_WIN7)
 			ThrowIfFailed(MFPutWorkItemEx2(queueId, 0, invokerResult.Get()));
+#else
+			ThrowIfFailed(MFPutWorkItemEx(queueId, invokerResult.Get()));
+#endif
 		}
 
 		virtual void Execute(const Wrappers::Event& event) override
 		{
+#if (WINVER > _WIN32_WINNT_WIN7)
 			Initialize();
 			ThrowIfFailed(MFPutWaitingWorkItem(event.Get(), 0, invokerResult.Get(), &itemKey));
+#else
+			ThrowIfFailed(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+#endif
 		}
 
 		virtual void Cancel() noexcept override
@@ -85,7 +93,11 @@ namespace
 	public:
 		MFSerializedWorkerQueueProvider(DWORD parentQueueId)
 		{
+#if (WINVER > _WIN32_WINNT_WIN7)
 			ThrowIfFailed(MFAllocateSerialWorkQueue(parentQueueId, &queueId));
+#else
+			ThrowIfFailed(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+#endif
 		}
 
 		~MFSerializedWorkerQueueProvider()
@@ -104,8 +116,18 @@ namespace
 
 MFWorkerQueueProvider::MFWorkerQueueProvider(DWORD taskId, LPCWSTR className, DWORD basePriority)
 {
+#if (WINVER > _WIN32_WINNT_WIN7)
 	ThrowIfFailed(MFLockSharedWorkQueue(className, basePriority, &taskId, &queueId));
 	this->taskId = taskId;
+#else
+	ThrowIfFailed(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
+#endif
+}
+
+MFWorkerQueueProvider::MFWorkerQueueProvider()
+{
+	ThrowIfFailed(MFAllocateWorkQueue(&queueId));
+	this->taskId = 0;
 }
 
 MFWorkerQueueProvider::~MFWorkerQueueProvider()
@@ -125,13 +147,21 @@ std::unique_ptr<WorkerQueueProvider> MFWorkerQueueProvider::CreateSerial()
 
 MFWorkerQueueProviderRef MFWorkerQueueProvider::GetAudio()
 {
+#if (WINVER > _WIN32_WINNT_WIN7)
 	static MFWorkerQueueProvider audioProvider(0, L"Audio", 0);
+#else
+	static MFWorkerQueueProvider audioProvider;
+#endif
 	return MFWorkerQueueProviderRef(audioProvider.queueId);
 }
 
 MFWorkerQueueProviderRef MFWorkerQueueProvider::GetProAudio()
 {
+#if (WINVER > _WIN32_WINNT_WIN7)
 	static MFWorkerQueueProvider proAudioProvider(0, L"Pro Audio", 0);
+#else
+	static MFWorkerQueueProvider proAudioProvider;
+#endif
 	return MFWorkerQueueProviderRef(proAudioProvider.queueId);
 }
 

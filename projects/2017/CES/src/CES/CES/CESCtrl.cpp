@@ -98,6 +98,7 @@ CCESCtrl::CCESCtrl()
 	//__debugbreak();
 	// TODO:  在此初始化控件的实例数据。
 	_cameraPipeline = WRL::Make<CES::CameraPipeline>();
+	_cameraPipeline->DeviceReady.Subscribe([=] { _cameraPipeline->Start(); });
 }
 
 // CCESCtrl::~CCESCtrl - 析构函数
