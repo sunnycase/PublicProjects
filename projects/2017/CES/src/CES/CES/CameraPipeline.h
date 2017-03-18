@@ -3,6 +3,9 @@
 #include <Tomato.Media/MFAsyncCallback.h>
 #include <Tomato.Core/OperationQueue.h>
 #include <vector>
+#include <evr.h>
+#include <d3d9.h>
+#include <evr9.h>
 
 namespace CES
 {
@@ -102,9 +105,11 @@ namespace CES
 
 		Event<void()> DeviceReady;
 	private:
-		void CreateDeviceDependendResources();
+		void CreateDeviceDependentResources();
+		void CreateDeviceIndependentResources();
 		void CreateSession();
 		void ConfigureTopology(IMFTopology* topology, IMFMediaSource* source, HWND videohWnd);
+		void AddBranchToPartialTopology(IMFTopology * topology, IMFMediaSource * source, IMFPresentationDescriptor* pd, DWORD streamId, HWND hWnd);
 		void OnMediaSessionEvent(IMFAsyncResult* pAsyncResult);
 		void OnDispatchOperation(std::shared_ptr<CameraPipelineOperation>& op);
 
@@ -115,6 +120,9 @@ namespace CES
 		WRL::ComPtr<IMFMediaSource> _cameraSource;
 		WRL::ComPtr<IMFMediaSource> _scannerSource;
 		WRL::ComPtr<IMFMediaSession> _mediaSession;
+		WRL::ComPtr<IMFVideoDisplayControl> _videoDispCtrl;
+		WRL::ComPtr<IMFVideoProcessor> _videoProcessor;
+		CameraSource _source;
 		WRL::ComPtr<NS_MEDIA::MFAsyncCallbackWithWeakRef<CameraPipeline>> _mediaSessionAsyncCallback;
 		std::shared_ptr<NS_CORE::OperationQueue<std::shared_ptr<CameraPipelineOperation>>> _operationQueue;
 	};

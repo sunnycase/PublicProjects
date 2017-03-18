@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "CameraPipeline.h"
 #include <Tomato.Media/MFWorkerQueueProvider.h>
+#include <DirectXMath.h>
+#include "EVRPresenter.h"
 
 using namespace WRL;
 using namespace CES;
@@ -33,7 +35,8 @@ CameraPipeline::CameraPipeline()
 	_operationQueue->SetWorkerQueue(NS_MEDIA::MFWorkerQueueProvider::GetAudio());
 
 	CreateSession();
-	CreateDeviceDependendResources();
+	CreateDeviceIndependentResources();
+	CreateDeviceDependentResources();
 }
 
 void CameraPipeline::OnMediaSessionEvent(IMFAsyncResult * pAsyncResult)
@@ -100,17 +103,52 @@ void CameraPipeline::ProcessSessionTopologyStatus(IMFMediaEvent * event)
 	UINT32 status;
 	ThrowIfFailed(event->GetUINT32(MF_EVENT_TOPOLOGY_STATUS, &status));
 	if (status == MF_TOPOSTATUS_READY)
+	{
+		ThrowIfFailed(MFGetService(_mediaSession.Get(), MR_VIDEO_RENDER_SERVICE, IID_PPV_ARGS(&_videoDispCtrl)));
+		ThrowIfFailed(MFGetService(_mediaSession.Get(), MR_VIDEO_MIXER_SERVICE, IID_PPV_ARGS(&_videoProcessor)));
+
+
 		DeviceReady.Publish();
+	}
+	else if(status == MF_TOPOSTATUS_STARTED_SOURCE)
+	{
+		DXVA2_ValueRange saturationRange;
+		ThrowIfFailed(_videoProcessor->GetProcAmpRange(DXVA2_ProcAmp_Saturation, &saturationRange));
+
+		DXVA2_ProcAmpValues values{};
+
+		// 文件、单据、证件: 黑白
+		if (_source == CameraSource::Scanner)
+			values.Saturation = saturationRange.MinValue;
+		else
+			values.Saturation = saturationRange.DefaultValue;
+		ThrowIfFailed(_videoProcessor->SetProcAmpValues(DXVA2_ProcAmp_Saturation, &values));
+
+		ComPtr<IDirect3DDeviceManager9> deviceManager;
+		ThrowIfFailed(MFGetService(_mediaSession.Get(), MR_VIDEO_ACCELERATION_SERVICE, IID_PPV_ARGS(&deviceManager)));
+
+		HANDLE handle = reinterpret_cast<HANDLE>(1);
+		//ThrowIfFailed(deviceManager->OpenDeviceHandle(&handle));
+		ComPtr<IDirect3DDevice9> device;
+		ThrowIfFailed(deviceManager->LockDevice(handle, &device, TRUE));
+		DirectX::XMFLOAT4X4 mat;
+		DirectX::XMStoreFloat4x4(&mat, DirectX::XMMatrixTranspose(DirectX::XMMatrixTranslation(100, 100, 0)));
+		
+		ThrowIfFailed(device->SetTransform(D3DTS_WORLD, reinterpret_cast<D3DMATRIX*>(&mat)));
+		ThrowIfFailed(deviceManager->UnlockDevice(handle, TRUE));
+	}
 }
 
 void CameraPipeline::OpenCamera(CameraSource source, HWND videohWnd)
 {
-	ComPtr<IMFTopology> topology;
-	ThrowIfFailed(MFCreateTopology(&topology));
-
 	IMFMediaSource* mediaSource = source == CameraSource::Camera ? _cameraSource.Get() : _scannerSource.Get();
 	if (!mediaSource)
 		ThrowAlways(L"摄像头未连接，或驱动未安装。");
+	_source = source;
+
+	ComPtr<IMFTopology> topology;
+	ThrowIfFailed(MFCreateTopology(&topology));
+
 	ConfigureTopology(topology.Get(), mediaSource, videohWnd);
 	ThrowIfFailed(_mediaSession->SetTopology(0, topology.Get()));
 }
@@ -120,7 +158,7 @@ void CameraPipeline::Start()
 	_operationQueue->Enqueue(std::make_shared<CameraPipelineOperation>(CameraPipelineOperationKind::Start));
 }
 
-void CameraPipeline::CreateDeviceDependendResources()
+void CameraPipeline::CreateDeviceDependentResources()
 {
 	ComPtr<IMFAttributes> attributes;
 	ThrowIfFailed(MFCreateAttributes(&attributes, 1));
@@ -131,9 +169,16 @@ void CameraPipeline::CreateDeviceDependendResources()
 	UINT32 count;
 	ThrowIfFailed(MFEnumDeviceSources(attributes.Get(), reinterpret_cast<IMFActivate***>(&activators._Myptr()), &count));
 	if (count > 0)
-		ThrowIfFailed(activators.get()[0]->ActivateObject(IID_PPV_ARGS(&_cameraSource)));
+		ThrowIfFailed(activators.get()[0]->ActivateObject(IID_PPV_ARGS(&_scannerSource)));
 	if (count > 1)
-		ThrowIfFailed(activators.get()[1]->ActivateObject(IID_PPV_ARGS(&_scannerSource)));
+		ThrowIfFailed(activators.get()[1]->ActivateObject(IID_PPV_ARGS(&_cameraSource)));
+}
+
+#include <wmcodecdsp.h>
+
+void CameraPipeline::CreateDeviceIndependentResources()
+{
+
 }
 
 void CameraPipeline::CreateSession()
@@ -168,6 +213,24 @@ namespace
 		*node = outputNode.Detach();
 	}
 
+	void AddTransformNode(IMFTopology * topology, const CLSID& clsid, IMFTopologyNode** node)
+	{
+		ComPtr<IMFTopologyNode> transformNode;
+		ThrowIfFailed(MFCreateTopologyNode(MF_TOPOLOGY_TRANSFORM_NODE, &transformNode));
+		ThrowIfFailed(transformNode->SetGUID(MF_TOPONODE_TRANSFORM_OBJECTID, clsid));
+		ThrowIfFailed(topology->AddNode(transformNode.Get()));
+		*node = transformNode.Detach();
+	}
+
+	void AddTransformNode(IMFTopology * topology, IMFTransform* transform, IMFTopologyNode** node)
+	{
+		ComPtr<IMFTopologyNode> transformNode;
+		ThrowIfFailed(MFCreateTopologyNode(MF_TOPOLOGY_TRANSFORM_NODE, &transformNode));
+		ThrowIfFailed(transformNode->SetObject(transform));
+		ThrowIfFailed(topology->AddNode(transformNode.Get()));
+		*node = transformNode.Detach();
+	}
+
 	bool CreateMediaSinkActivator(IMFStreamDescriptor* streamDesc, HWND hWnd, IMFActivate** activate)
 	{
 		ComPtr<IMFMediaTypeHandler> mtHandler;
@@ -178,28 +241,11 @@ namespace
 		if (majorType == MFMediaType_Video)
 		{
 			ThrowIfFailed(MFCreateVideoRendererActivate(hWnd, activate));
+			auto evr = Make<EVRPresenterActivate>();
+			ThrowIfFailed((*activate)->SetUnknown(MF_ACTIVATE_CUSTOM_VIDEO_PRESENTER_ACTIVATE, evr.Get()));
 			return true;
 		}
 		return false;
-	}
-
-	void AddBranchToPartialTopology(IMFTopology * topology, IMFMediaSource * source, IMFPresentationDescriptor* pd, DWORD streamId, HWND hWnd)
-	{
-		BOOL isSelected;
-		ComPtr<IMFStreamDescriptor> streamDesc;
-		ThrowIfFailed(pd->GetStreamDescriptorByIndex(streamId, &isSelected, &streamDesc));
-		if (isSelected)
-		{
-			ComPtr<IMFActivate> sinkActivate;
-			if (CreateMediaSinkActivator(streamDesc.Get(), hWnd, &sinkActivate))
-			{
-				ComPtr<IMFTopologyNode> sourceNode;
-				AddSourceNode(topology, source, pd, streamDesc.Get(), &sourceNode);
-				ComPtr<IMFTopologyNode> outputNode;
-				AddOutputNode(topology, sinkActivate.Get(), streamId, &outputNode);
-				ThrowIfFailed(sourceNode->ConnectOutput(0, outputNode.Get(), 0));
-			}
-		}
 	}
 }
 
@@ -212,4 +258,24 @@ void CameraPipeline::ConfigureTopology(IMFTopology * topology, IMFMediaSource * 
 	ThrowIfFailed(pd->GetStreamDescriptorCount(&streamDescCount));
 	for (DWORD i = 0; i < streamDescCount; i++)
 		AddBranchToPartialTopology(topology, source, pd.Get(), i, videohWnd);
+}
+
+void CameraPipeline::AddBranchToPartialTopology(IMFTopology * topology, IMFMediaSource * source, IMFPresentationDescriptor* pd, DWORD streamId, HWND hWnd)
+{
+	BOOL isSelected;
+	ComPtr<IMFStreamDescriptor> streamDesc;
+	ThrowIfFailed(pd->GetStreamDescriptorByIndex(streamId, &isSelected, &streamDesc));
+	if (isSelected)
+	{
+		ComPtr<IMFActivate> sinkActivate;
+		if (CreateMediaSinkActivator(streamDesc.Get(), hWnd, &sinkActivate))
+		{
+			ComPtr<IMFTopologyNode> sourceNode;
+			AddSourceNode(topology, source, pd, streamDesc.Get(), &sourceNode);
+
+			ComPtr<IMFTopologyNode> outputNode;
+			AddOutputNode(topology, sinkActivate.Get(), streamId, &outputNode);
+			ThrowIfFailed(sourceNode->ConnectOutput(0, outputNode.Get(), 0));
+		}
+	}
 }

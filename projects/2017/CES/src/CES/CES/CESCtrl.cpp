@@ -122,7 +122,7 @@ void CCESCtrl::OnDraw(
 	static bool loaded = false;
 	if (!loaded)
 	{
-		_cameraPipeline->OpenCamera(CES::CameraSource::Camera, m_hWnd);
+		_cameraPipeline->OpenCamera(CES::CameraSource::Scanner, m_hWnd);
 		loaded = true;
 	}
 }
