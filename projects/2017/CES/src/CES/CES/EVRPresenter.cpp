@@ -20,7 +20,22 @@ HRESULT EVRPresenter::GetDeviceID(IID * pDeviceID)
 
 HRESULT EVRPresenter::OnClockStart(MFTIME hnsSystemTime, LONGLONG llClockStartOffset)
 {
-	return E_NOTIMPL;
+	try
+	{
+		LOCK_STATE();
+		_state = EVRPresenterState::Started;
+
+		if (IsActive())
+		{
+			if (llClockStartOffset != PRESENTATION_CURRENT_POSITION)
+				Flush();
+		}
+		else
+			StartFrameStep();
+		ProcessOutput();
+		return S_OK;
+	}
+	TCATCH_ALL();
 }
 
 HRESULT EVRPresenter::OnClockStop(MFTIME hnsSystemTime)
@@ -92,17 +107,57 @@ HRESULT EVRPresenter::GetCurrentMediaType(IMFVideoMediaType ** ppMediaType)
 
 HRESULT EVRPresenter::GetSlowestRate(MFRATE_DIRECTION eDirection, BOOL fThin, float * pflRate)
 {
-	return E_NOTIMPL;
+	try
+	{
+		LOCK_STATE();
+
+		CheckShutdown();
+		*pflRate = 0;
+		return S_OK;
+	}
+	TCATCH_ALL();
 }
 
 HRESULT EVRPresenter::GetFastestRate(MFRATE_DIRECTION eDirection, BOOL fThin, float * pflRate)
 {
-	return E_NOTIMPL;
+	try
+	{
+		LOCK_STATE();
+
+		CheckShutdown();
+
+		auto maxRate = GetMaxRate(fThin);
+		if (eDirection == MFRATE_REVERSE)
+			maxRate = -maxRate;
+		*pflRate = maxRate;
+		return S_OK;
+	}
+	TCATCH_ALL();
 }
 
 HRESULT EVRPresenter::IsRateSupported(BOOL fThin, float flRate, float * pflNearestSupportedRate)
 {
-	return E_NOTIMPL;
+	try
+	{
+		LOCK_STATE();
+		CheckShutdown();
+
+		auto hr = S_OK;
+		float nearestRate = flRate;
+		auto maxRate = GetMaxRate(fThin);
+		if (std::abs(flRate) > maxRate)
+		{
+			if(flRate < 0)
+				nearestRate = -maxRate;
+			else
+				nearestRate = maxRate;
+			hr = MF_E_UNSUPPORTED_RATE;
+		}
+		if (pflNearestSupportedRate)
+			*pflNearestSupportedRate = nearestRate;
+		return hr;
+	}
+	TCATCH_ALL();
 }
 
 HRESULT EVRPresenter::GetService(REFGUID guidService, REFIID riid, LPVOID * ppvObject)
@@ -408,6 +463,7 @@ void CES::EVRPresenter::RenegotiateMediaType()
 				ThrowIfFailed(_mixer->SetOutputType(0, optimalMT.Get(), MFT_SET_TYPE_TEST_ONLY));
 				SetMediaType(optimalMT.Get());
 				ThrowIfFailed(_mixer->SetOutputType(0, optimalMT.Get(), 0));
+				break;
 			}
 			CATCH_ALL_WITHHR(hr);
 		}
@@ -442,6 +498,58 @@ void CES::EVRPresenter::ProcessOutput()
 		return;
 	if (!_mixer)
 		ThrowIfFailed(MF_E_INVALIDREQUEST);
+}
+
+float EVRPresenter::GetMaxRate(bool thin)
+{
+	float   fMaxRate = FLT_MAX;
+	MFRatio fps = { 0, 0 };
+	UINT    MonitorRateHz = 0;
+
+	if (!thin && _mediaType)
+	{
+		ThrowIfFailed(_mediaType->GetUINT64(MF_MT_FRAME_RATE, reinterpret_cast<UINT64*>(&fps)));
+		MonitorRateHz = _d3d9Renderer.GetRefreshRate();
+
+		if (fps.Denominator && fps.Numerator && MonitorRateHz)
+		{
+			// Max Rate = Refresh Rate / Frame Rate
+			fMaxRate = (float)MulDiv(MonitorRateHz, fps.Denominator, fps.Numerator);
+		}
+	}
+
+	return fMaxRate;
+}
+
+void CES::EVRPresenter::StartFrameStep()
+{
+	if (_frameStep.State == FrameStepState::WaitingStart)
+	{
+		_frameStep.State = FrameStepState::Pending;
+		while (!_frameStep.Samples.empty() && _frameStep.State == FrameStepState::Pending)
+		{
+			auto sample = std::move(_frameStep.Samples.front());
+			_frameStep.Samples.pop();
+			DeliverFrameStepSample(sample.Get());
+		}
+	}
+	else if(_frameStep.State == FrameStepState::None)
+	{
+		while (!_frameStep.Samples.empty())
+		{
+			auto sample = std::move(_frameStep.Samples.front());
+			_frameStep.Samples.pop();
+			DeliverSample(sample.Get(), false);
+		}
+	}
+}
+
+void CES::EVRPresenter::DeliverFrameStepSample(IMFSample * sample)
+{
+}
+
+void CES::EVRPresenter::DeliverSample(IMFSample * sample, bool flag)
+{
 }
 
 EVRPresenterActivate::EVRPresenterActivate()

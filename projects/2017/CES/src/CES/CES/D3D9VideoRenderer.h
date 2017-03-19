@@ -21,6 +21,8 @@ namespace CES
 		RECT GetDestinationRect() const noexcept { return _destRect; }
 		void SetDestinationRect(const RECT& rect);
 
+		UINT GetRefreshRate() const noexcept { return _displayMode.RefreshRate; }
+
 		STDMETHODIMP GetService(REFGUID guidService, REFIID riid, LPVOID * ppvObject);
 	private:
 		void CreateDeviceIndependentResources();
@@ -29,11 +31,15 @@ namespace CES
 		bool _isFullscreen;
 		HWND _videoHWnd = nullptr;
 		RECT _destRect;
+		D3DDISPLAYMODE _displayMode;
 		WRL::ComPtr<IDirect3D9Ex> _d3d9;
 		WRL::ComPtr<IDirect3DDevice9Ex> _d3dDevice;
 		WRL::ComPtr<IDirect3DDeviceManager9> _deviceManager;
 		UINT32 _resetToken;
 		WRL::ComPtr<IDirectXVideoProcessorService> _videoService;
+		WRL::ComPtr<IDirectXVideoProcessor> _dxVideoProcessor;
+		DXVA2_VideoProcessorCaps _videoProcessorCaps;
+		D3DFORMAT _videoSubFormat;
 
 		DXVA2_VideoDesc _videoDesc;
 

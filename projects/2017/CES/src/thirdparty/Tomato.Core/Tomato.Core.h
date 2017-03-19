@@ -89,6 +89,9 @@ struct cotaskmem_deleter
 template<class T>
 using unique_cotaskmem = std::unique_ptr<T, cotaskmem_deleter<T>>;
 
+template<class T>
+using unique_cotaskmem_arr = std::unique_ptr<T[], cotaskmem_deleter<T>>;
+
 #endif
 
 #include <chrono>

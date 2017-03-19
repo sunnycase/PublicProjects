@@ -5,6 +5,7 @@
 #include <d3d9.h>
 #include <evr9.h>
 #include <atomic>
+#include <queue>
 #include "D3D9VideoRenderer.h"
 
 namespace CES
@@ -56,6 +57,27 @@ namespace CES
 		STDMETHODIMP SetFullscreen(BOOL fFullscreen) override;
 		STDMETHODIMP GetFullscreen(BOOL * pfFullscreen) override;
 	private:
+		enum class FrameStepState
+		{
+			None,
+			WaitingStart,
+			Pending,
+			Scheduled,
+			Complete
+		};
+		
+		struct FrameStep
+		{
+			FrameStep() : State(FrameStepState::None), Steps(0), pSampleNoRef(NULL)
+			{
+			}
+
+			FrameStepState     State;          // Current frame-step state.
+			std::queue<WRL::ComPtr<IMFSample>>     Samples;        // List of pending samples for frame-stepping.
+			DWORD               Steps;          // Number of steps left.
+			DWORD_PTR           pSampleNoRef;   // Identifies the frame-step sample.
+		};
+
 		bool IsActive() const noexcept;
 		void CheckShutdown() const;
 
@@ -67,6 +89,11 @@ namespace CES
 		WRL::ComPtr<IMFMediaType> CreateOptimalVideoType(IMFMediaType* proposedMT);
 		void NotifyEvent(long EventCode, LONG_PTR Param1, LONG_PTR Param2);
 		void ProcessOutput();
+
+		float GetMaxRate(bool thin);
+		void StartFrameStep();
+		void DeliverFrameStepSample(IMFSample* sample);
+		void DeliverSample(IMFSample* sample, bool flag);
 	private:
 		D3D9VideoRenderer _d3d9Renderer;
 
@@ -79,6 +106,7 @@ namespace CES
 		MFVideoNormalizedRect _normalizedVideoSrc;
 		bool _needRepaint = false;
 		bool _preRolled = false;
+		FrameStep _frameStep;
 	};
 
 	class EVRPresenterActivate : public WRL::RuntimeClass<WRL::RuntimeClassFlags<WRL::ClassicCom>, IMFActivate>

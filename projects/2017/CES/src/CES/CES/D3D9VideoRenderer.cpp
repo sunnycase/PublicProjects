@@ -60,7 +60,18 @@ namespace
 
 	const D3DFORMAT VIDEO_MAIN_FORMAT = D3DFMT_YUY2;
 	const D3DFORMAT VIDEO_SUB_FORMAT = D3DFORMAT('VUYA'); // AYUV
-	const DWORD DXVA_RENDER_TARGET = DXVA2_VideoProcessorRenderTarget;
+	const DWORD DXVA_RENDER_TARGET = DXVA2_VideoProcessorRenderTarget; 
+	
+	const D3DFORMAT VIDEO_RENDER_TARGET_FORMAT = D3DFMT_X8R8G8B8;
+	const UINT SUB_STREAM_COUNT = 1;
+	const UINT DWM_BUFFER_COUNT = 4;
+	const BYTE DEFAULT_PLANAR_ALPHA_VALUE = 0xFF;
+
+	const UINT VIDEO_REQUIED_OP = DXVA2_VideoProcess_YUV2RGB |
+		DXVA2_VideoProcess_StretchX |
+		DXVA2_VideoProcess_StretchY |
+		DXVA2_VideoProcess_SubRects |
+		DXVA2_VideoProcess_SubStreams;
 }
 
 void CES::D3D9VideoRenderer::CreateDeviceIndependentResources()
@@ -98,8 +109,7 @@ void CES::D3D9VideoRenderer::CreateDeviceDependentResources()
 		auto monitor = MonitorFromWindow(_videoHWnd, MONITOR_DEFAULTTONEAREST);
 		adapterId = SelectAdapter(_d3d9.Get(), monitor);
 	}
-	D3DDISPLAYMODE displayMode;
-	ThrowIfFailed(_d3d9->GetAdapterDisplayMode(adapterId, &displayMode));
+	ThrowIfFailed(_d3d9->GetAdapterDisplayMode(adapterId, &_displayMode));
 #if _DEBUG
 
 	D3DADAPTER_IDENTIFIER9 adapterIdentifier;
@@ -137,7 +147,41 @@ void CES::D3D9VideoRenderer::CreateDeviceDependentResources()
 
 	ThrowIfFailed(DXVA2CreateVideoService(_d3dDevice.Get(), IID_PPV_ARGS(&_videoService)));
 
-	unique_cotaskmem<GUID> deviceGuids;
+	unique_cotaskmem_arr<GUID> deviceGuids;
 	UINT deviceGuidCount;
 	ThrowIfFailed(_videoService->GetVideoProcessorDeviceGuids(&_videoDesc, &deviceGuidCount, &deviceGuids._Myptr()));
+
+	if (deviceGuidCount)
+	{
+		ThrowIfFailed(_videoService->CreateVideoProcessor(deviceGuids[0], &_videoDesc, VIDEO_RENDER_TARGET_FORMAT,
+			SUB_STREAM_COUNT, &_dxVideoProcessor));
+		ThrowIfFailed(_videoService->GetVideoProcessorCaps(deviceGuids[0], &_videoDesc, VIDEO_RENDER_TARGET_FORMAT,
+			&_videoProcessorCaps));
+
+		{
+			UINT rtCount;
+			unique_cotaskmem_arr<D3DFORMAT> formats;
+			ThrowIfFailed(_videoService->GetVideoProcessorRenderTargets(deviceGuids[0], &_videoDesc, &rtCount, &formats._Myptr()));
+			ThrowIfNot(std::find(formats.get(), formats.get() + rtCount, VIDEO_RENDER_TARGET_FORMAT) != formats.get() + rtCount,
+				L"GetVideoProcessorRenderTargets doesn't support that format.");
+		}
+		{
+			UINT rtCount;
+			unique_cotaskmem_arr<D3DFORMAT> formats;
+			ThrowIfFailed(_videoService->GetVideoProcessorSubStreamFormats(deviceGuids[0], &_videoDesc, 
+				VIDEO_RENDER_TARGET_FORMAT, &rtCount, &formats._Myptr()));
+			ThrowIfNot(std::find(formats.get(), formats.get() + rtCount, VIDEO_SUB_FORMAT) != formats.get() + rtCount,
+				L"GetVideoProcessorRenderTargets doesn't support that format.");
+			_videoSubFormat = D3DFMT_A8R8G8B8;
+		}
+	}
+	else
+	{
+		ThrowIfFailed(_videoService->CreateVideoProcessor(DXVA2_VideoProcProgressiveDevice, &_videoDesc,
+			VIDEO_RENDER_TARGET_FORMAT, SUB_STREAM_COUNT, &_dxVideoProcessor));
+		ThrowIfFailed(_videoService->GetVideoProcessorCaps(DXVA2_VideoProcProgressiveDevice, &_videoDesc,
+			VIDEO_RENDER_TARGET_FORMAT, &_videoProcessorCaps));
+	}
+	ThrowIfNot((_videoProcessorCaps.VideoProcessorOperations & VIDEO_REQUIED_OP) == VIDEO_REQUIED_OP,
+		L"The DXVA2 device doesn't support the VP operations.");
 }
