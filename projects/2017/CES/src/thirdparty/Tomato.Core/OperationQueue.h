@@ -43,13 +43,28 @@ public:
 		});
 	}
 
+	void Flush()
+	{
+		operations.clear();
+	}
+
 	// ²Ù×÷Èë¶Ó
 	template<class T>
 	void Enqueue(T&& operation)
 	{
 		if (!invoker) ThrowIfFailed(E_NOT_VALID_STATE);
 		operations.push(std::forward<T>(operation));
-		ActiveInvoker();
+		if (_enabled.load(std::memory_order_relaxed))
+			ActiveInvoker();
+	}
+
+	void SetEnabled(bool enabled)
+	{
+		_enabled.store(enabled, std::memory_order_relaxed);
+		if (enabled)
+			ActiveInvoker();
+		else
+			InactiveInvoker();
 	}
 private:
 	void OnProcessOperation()
@@ -57,7 +72,7 @@ private:
 		try
 		{
 			TOperation operation;
-			while (operations.try_pop(operation))
+			while (_enabled.load(std::memory_order_relaxed) && operations.try_pop(operation))
 				dispatcher(operation);
 			invokerActive.store(false, std::memory_order_release);
 		}
@@ -74,11 +89,17 @@ protected:
 		if (invokerActive.compare_exchange_strong(expect, true))
 			invoker->Execute();
 	}
+
+	void InactiveInvoker()
+	{
+		invoker->Cancel();
+	}
 protected:
 	std::shared_ptr<WorkerThread> invoker;
 	std::function<void(TOperation&)> dispatcher;
 	concurrency::concurrent_queue<TOperation> operations;
 	std::atomic<bool> invokerActive = false;
+	std::atomic<bool> _enabled = true;
 };
 
 template<class TOperation>
@@ -129,7 +150,7 @@ private:
 	{
 		try
 		{
-			while (true)
+			while (_enabled.load(std::memory_order_relaxed))
 			{
 				TOperation operation;
 				if (operations.try_pop(operation))

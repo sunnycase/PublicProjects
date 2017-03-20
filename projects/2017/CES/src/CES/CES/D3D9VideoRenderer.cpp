@@ -36,6 +36,34 @@ STDMETHODIMP CES::D3D9VideoRenderer::GetService(REFGUID guidService, REFIID riid
 	return _deviceManager.CopyTo(riid, ppvObject);
 }
 
+auto D3D9VideoRenderer::GetDeviceState() -> std::pair<HRESULT, DeviceState>
+{
+	LOCK_STATE();
+	auto hr = _d3dDevice->CheckDeviceState(_videoHWnd);
+	auto state = DeviceState::Ok;
+	switch (hr)
+	{
+	case S_OK:
+	case S_PRESENT_OCCLUDED:
+	case S_PRESENT_MODE_CHANGED:
+		hr = S_OK;
+		break; 
+	case D3DERR_DEVICELOST:
+	case D3DERR_DEVICEHUNG:
+		CreateDeviceDependentResources();
+		state = DeviceState::Reset;
+		hr = S_OK;
+		break;
+	case D3DERR_DEVICEREMOVED:
+		state = DeviceState::Removed;
+		break;
+	default:
+		hr = S_OK;
+		break;
+	}
+	return std::make_pair(hr, state);
+}
+
 namespace
 {
 	UINT SelectAdapter(IDirect3D9Ex* d3d, HMONITOR monitor)

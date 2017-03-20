@@ -27,7 +27,7 @@ private:
 	DWORD queueId;
 };
 
-class TOMATO_MEDIA_API MFWorkerQueueProvider : public Core::WorkerQueueProvider, Core::NonCopyable
+class TOMATO_MEDIA_API MFWorkerQueueProvider : public Core::WorkerQueueProvider, NonCopyable
 {
 public:
 	// 获取 Pro Audio 工作队列

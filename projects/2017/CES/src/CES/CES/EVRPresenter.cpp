@@ -8,7 +8,8 @@ using namespace CES;
 #define LOCK_STATE() auto locker = _stateLock.Lock()
 
 EVRPresenter::EVRPresenter()
-	:_state(EVRPresenterState::NotInitialized), _normalizedVideoSrc({ 0, 0, 1, 1 })
+	:_state(EVRPresenterState::NotInitialized), _normalizedVideoSrc({ 0, 0, 1, 1 }),
+	_scheduler(Make<Scheduler>())
 {
 }
 
@@ -55,7 +56,23 @@ HRESULT EVRPresenter::OnClockRestart(MFTIME hnsSystemTime)
 
 HRESULT EVRPresenter::OnClockSetRate(MFTIME hnsSystemTime, float flRate)
 {
-	return E_NOTIMPL;
+	try
+	{
+		LOCK_STATE();
+
+		CheckShutdown();
+		// If the rate is changing from zero (scrubbing) to non-zero, cancel the 
+		// frame-step operation.
+		if (_clockRate == 0 && flRate != 0)
+		{
+			CancelFrameStep();
+			_frameStep.Samples.swap(decltype(_frameStep.Samples)());
+		}
+		_clockRate = flRate;
+		_scheduler->SetClockRate(flRate);
+		return S_OK;
+	}
+	TCATCH_ALL();
 }
 
 HRESULT EVRPresenter::ProcessMessage(MFVP_MESSAGE_TYPE eMessage, ULONG_PTR ulParam)
@@ -68,23 +85,30 @@ HRESULT EVRPresenter::ProcessMessage(MFVP_MESSAGE_TYPE eMessage, ULONG_PTR ulPar
 		switch (eMessage)
 		{
 		case MFVP_MESSAGE_FLUSH:
+			Flush();
 			break;
 		case MFVP_MESSAGE_INVALIDATEMEDIATYPE:
 			RenegotiateMediaType();
 			break;
 		case MFVP_MESSAGE_PROCESSINPUTNOTIFY:
+			ProcessInputNotify();
 			break;
 		case MFVP_MESSAGE_BEGINSTREAMING:
+			BeginStreaming();
 			break;
 		case MFVP_MESSAGE_ENDSTREAMING:
+			EndStreaming();
 			break;
 		case MFVP_MESSAGE_ENDOFSTREAM:
 			break;
 		case MFVP_MESSAGE_STEP:
+			PrepareFrameStep(LODWORD(ulParam));
 			break;
 		case MFVP_MESSAGE_CANCELSTEP:
+			CancelFrameStep();
 			break;
 		default:
+			return E_INVALIDARG;
 			break;
 		}
 		return S_OK;
@@ -147,7 +171,7 @@ HRESULT EVRPresenter::IsRateSupported(BOOL fThin, float flRate, float * pflNeare
 		auto maxRate = GetMaxRate(fThin);
 		if (std::abs(flRate) > maxRate)
 		{
-			if(flRate < 0)
+			if (flRate < 0)
 				nearestRate = -maxRate;
 			else
 				nearestRate = maxRate;
@@ -405,19 +429,19 @@ HRESULT EVRPresenter::GetFullscreen(BOOL * pfFullscreen)
 	return S_OK;
 }
 
-bool CES::EVRPresenter::IsActive() const noexcept
+bool EVRPresenter::IsActive() const noexcept
 {
 	auto state = _state.load(std::memory_order_acquire);
 	return state == EVRPresenterState::Started || state == EVRPresenterState::Paused;
 }
 
-void CES::EVRPresenter::CheckShutdown() const
+void EVRPresenter::CheckShutdown() const
 {
 	if (_state.load(std::memory_order_acquire) == EVRPresenterState::Shutdown)
 		ThrowIfFailed(MF_E_SHUTDOWN);
 }
 
-void CES::EVRPresenter::ConfigureMixer()
+void EVRPresenter::ConfigureMixer()
 {
 	ComPtr<IMFVideoDeviceID> deviceId;
 	ThrowIfFailed(_mixer.As(&deviceId));
@@ -429,11 +453,11 @@ void CES::EVRPresenter::ConfigureMixer()
 	SetMixerSourceRect(_mixer.Get(), _normalizedVideoSrc);
 }
 
-void CES::EVRPresenter::Flush()
+void EVRPresenter::Flush()
 {
 }
 
-void CES::EVRPresenter::SetMediaType(IMFMediaType * mediaType)
+void EVRPresenter::SetMediaType(IMFMediaType * mediaType)
 {
 	if (!mediaType)
 	{
@@ -445,7 +469,7 @@ void CES::EVRPresenter::SetMediaType(IMFMediaType * mediaType)
 	}
 }
 
-void CES::EVRPresenter::RenegotiateMediaType()
+void EVRPresenter::RenegotiateMediaType()
 {
 	if (!_mixer) ThrowIfFailed(MF_E_INVALIDREQUEST);
 
@@ -473,23 +497,52 @@ void CES::EVRPresenter::RenegotiateMediaType()
 	ThrowIfFailed(hr);
 }
 
-bool CES::EVRPresenter::IsMediaTypeSupported(IMFMediaType * mediaType)
+bool EVRPresenter::IsMediaTypeSupported(IMFMediaType * mediaType)
 {
 	return true;
 }
 
-WRL::ComPtr<IMFMediaType> CES::EVRPresenter::CreateOptimalVideoType(IMFMediaType * proposedMT)
+WRL::ComPtr<IMFMediaType> EVRPresenter::CreateOptimalVideoType(IMFMediaType * proposedMT)
 {
 	return proposedMT;
 }
 
-void CES::EVRPresenter::NotifyEvent(long EventCode, LONG_PTR Param1, LONG_PTR Param2)
+void EVRPresenter::NotifyEvent(long EventCode, LONG_PTR Param1, LONG_PTR Param2)
 {
 	if (auto eventSink = _mediaEventSink)
 		ThrowIfFailed(eventSink->Notify(EventCode, Param1, Param2));
 }
 
-void CES::EVRPresenter::ProcessOutput()
+namespace
+{
+#define INITGUID
+#include <guiddef.h>
+
+	// {ADE43674-0887-4F9B-B3CB-78AE8EB9807D}   MFSampleExtension_PoolHandle          {UINT64 (UINT_PTR)}
+	DEFINE_GUID(MFSampleExtension_PoolHandle,
+		0xade43674, 0x887, 0x4f9b, 0xb3, 0xcb, 0x78, 0xae, 0x8e, 0xb9, 0x80, 0x7d);
+
+	ComPtr<IMFSample> AllocateSample(ResourceContainer<EVRPresenter::SampleResource>& container)
+	{
+		auto handle = container.Allocate();
+		auto sample = container.FindResource(handle);
+		auto hr = sample.Get()->SetUINT64(MFSampleExtension_PoolHandle, handle);
+		if (FAILED(hr))
+		{
+			container.RetireAndCleanupResource(handle);
+			ThrowIfFailed(hr);
+			std::unexpected();
+		}
+		return sample.Get();
+	}
+}
+
+EVRPresenter::SampleResource::SampleResource()
+{
+	
+}
+
+void EVRPresenter::ProcessOutput()
 {
 	if ((_state != EVRPresenterState::Started) &&  // Not running.
 		!_needRepaint &&             // Not a repaint request.
@@ -498,6 +551,32 @@ void CES::EVRPresenter::ProcessOutput()
 		return;
 	if (!_mixer)
 		ThrowIfFailed(MF_E_INVALIDREQUEST);
+
+	auto sample = AllocateSample(_samplesPool);
+	if (_needRepaint)
+	{
+		_needRepaint = false;
+	}
+}
+
+void EVRPresenter::ProcessOutputLoop()
+{
+	auto hr = S_OK;
+	try
+	{
+		while (SUCCEEDED(hr))
+		{
+			if (!_sampleNotify)
+			{
+				hr = MF_E_TRANSFORM_NEED_MORE_INPUT;
+				break;
+			}
+			ProcessOutput();
+		}
+	}
+	CATCH_ALL_WITHHR(hr);
+	if (hr == MF_E_TRANSFORM_NEED_MORE_INPUT)
+		CheckEndOfStream();
 }
 
 float EVRPresenter::GetMaxRate(bool thin)
@@ -510,7 +589,7 @@ float EVRPresenter::GetMaxRate(bool thin)
 	{
 		ThrowIfFailed(_mediaType->GetUINT64(MF_MT_FRAME_RATE, reinterpret_cast<UINT64*>(&fps)));
 		MonitorRateHz = _d3d9Renderer.GetRefreshRate();
-
+		
 		if (fps.Denominator && fps.Numerator && MonitorRateHz)
 		{
 			// Max Rate = Refresh Rate / Frame Rate
@@ -521,7 +600,17 @@ float EVRPresenter::GetMaxRate(bool thin)
 	return fMaxRate;
 }
 
-void CES::EVRPresenter::StartFrameStep()
+void EVRPresenter::PrepareFrameStep(DWORD steps)
+{
+	_frameStep.Steps += steps;
+	_frameStep.State = FrameStepState::WaitingStart;
+	// If the clock is are already running, we can start frame-stepping now.
+	// Otherwise, we will start when the clock starts.
+	if (_state == EVRPresenterState::Started)
+		StartFrameStep();
+}
+
+void EVRPresenter::StartFrameStep()
 {
 	if (_frameStep.State == FrameStepState::WaitingStart)
 	{
@@ -533,7 +622,7 @@ void CES::EVRPresenter::StartFrameStep()
 			DeliverFrameStepSample(sample.Get());
 		}
 	}
-	else if(_frameStep.State == FrameStepState::None)
+	else if (_frameStep.State == FrameStepState::None)
 	{
 		while (!_frameStep.Samples.empty())
 		{
@@ -544,11 +633,118 @@ void CES::EVRPresenter::StartFrameStep()
 	}
 }
 
-void CES::EVRPresenter::DeliverFrameStepSample(IMFSample * sample)
+void EVRPresenter::CancelFrameStep()
 {
+	auto oldState = _frameStep.State;
+	_frameStep.State = FrameStepState::None;
+	_frameStep.Steps = 0;
+	if (oldState > FrameStepState::None && oldState < FrameStepState::Complete)
+		NotifyEvent(EC_STEP_COMPLETE, TRUE, 0);
 }
 
-void CES::EVRPresenter::DeliverSample(IMFSample * sample, bool flag)
+void EVRPresenter::CompleteFrameStep(IMFSample * sample)
+{
+	MFTIME hnsSampleTime = 0;
+
+	_frameStep.State = FrameStepState::Complete;
+	NotifyEvent(EC_STEP_COMPLETE, FALSE, 0);
+	if (IsScrubbing())
+	{
+		if (FAILED(sample->GetSampleTime(&hnsSampleTime)))
+		{
+			if (_clock)
+			{
+				MFTIME hnsSystemTime;
+				_clock->GetCorrelatedTime(0, &hnsSampleTime, &hnsSystemTime);
+			}
+		}
+		NotifyEvent(EC_SCRUB_TIME, LOWORD(hnsSampleTime), HIWORD(hnsSampleTime));
+	}
+}
+
+namespace
+{
+	bool IsSampleTimePassed(IMFSample* sample, IMFClock* clock)
+	{
+		MFTIME hnsTimeNow = 0;
+		MFTIME hnsSystemTime = 0;
+		MFTIME hnsSampleStart = 0;
+		MFTIME hnsSampleDuration = 0;
+
+		if (SUCCEEDED(clock->GetCorrelatedTime(0, &hnsTimeNow, &hnsSystemTime)))
+			if (SUCCEEDED(sample->GetSampleTime(&hnsSampleStart)))
+				if (SUCCEEDED(sample->GetSampleDuration(&hnsSampleDuration)))
+					return hnsSampleStart + hnsSampleDuration < hnsTimeNow;
+		return false;
+	}
+}
+
+void EVRPresenter::DeliverFrameStepSample(IMFSample * sample)
+{
+	if (IsScrubbing() && _clock && IsSampleTimePassed(sample, _clock.Get()))
+		; // Discard this sample.
+	else if(_frameStep.State >= FrameStepState::Scheduled)
+	{
+		// A frame was already submitted. Put this sample on the frame-step queue, 
+		// in case we are asked to step to the next frame. If frame-stepping is
+		// cancelled, this sample will be processed normally.
+		_frameStep.Samples.emplace(sample);
+	}
+	else
+	{
+		if (_frameStep.Steps)
+			_frameStep.Steps--; 
+		if (_frameStep.Steps)
+			; // This is not the last step. Discard this sample.
+		else if (_frameStep.State == FrameStepState::WaitingStart)
+		{
+			// This is the right frame, but the clock hasn't started yet. Put the
+			// sample on the frame-step queue. When the clock starts, the sample
+			// will be processed.
+			_frameStep.Samples.emplace(sample);
+		}
+		else
+		{
+			DeliverSample(sample, false);
+			_frameStep.State = FrameStepState::Scheduled;
+		}
+	}
+}
+
+void EVRPresenter::DeliverSample(IMFSample * sample, bool repaint)
+{
+	auto state = D3D9VideoRenderer::DeviceState::Ok;
+	auto presentNow = _state != EVRPresenterState::Started || IsScrubbing() || repaint;
+	auto deviceState = _d3d9Renderer.GetDeviceState();
+	auto hr = deviceState.first;
+	if (SUCCEEDED(hr))
+		_scheduler->ScheduleSample(sample, presentNow);
+	if (FAILED(hr) && hr != MF_E_NOT_INITIALIZED)
+		NotifyEvent(EC_ERRORABORT, hr, 0);
+	else if(deviceState.second == D3D9VideoRenderer::DeviceState::Reset)
+		NotifyEvent(EC_DISPLAY_CHANGED, S_OK, 0);
+}
+
+void EVRPresenter::ProcessInputNotify()
+{
+	_sampleNotify = true;
+	if (!_mediaType)
+		ThrowIfFailed(MF_E_TRANSFORM_TYPE_NOT_SET);
+	else
+		ProcessOutputLoop();
+}
+
+void EVRPresenter::BeginStreaming()
+{
+	_scheduler->StartScheduler(_clock.Get());
+}
+
+void EVRPresenter::EndStreaming()
+{
+	_scheduler->StopScheduler();
+}
+
+void CES::EVRPresenter::CheckEndOfStream()
 {
 }
 

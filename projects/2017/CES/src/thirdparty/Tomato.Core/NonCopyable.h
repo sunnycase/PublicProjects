@@ -5,15 +5,12 @@
 // 作者：SunnyCase
 // 创建日期 2015-08-16
 #pragma once
-#include "Tomato.Core.h"
-
-DEFINE_NS_CORE
 
 struct NonCopyable
 {
-	NonCopyable(){}
+	NonCopyable() = default;
 	NonCopyable(NonCopyable&) = delete;
+	NonCopyable(NonCopyable&&) = default;
 	NonCopyable& operator=(NonCopyable&) = delete;
+	NonCopyable& operator=(NonCopyable&&) = default;
 };
-
-END_NS_CORE

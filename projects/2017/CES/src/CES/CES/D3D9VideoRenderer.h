@@ -10,6 +10,13 @@ namespace CES
 	class D3D9VideoRenderer
 	{
 	public:
+		enum class DeviceState
+		{
+			Ok,
+			Reset,
+			Removed
+		};
+
 		D3D9VideoRenderer();
 
 		bool GetFullscreen() const noexcept { return _isFullscreen; }
@@ -24,6 +31,7 @@ namespace CES
 		UINT GetRefreshRate() const noexcept { return _displayMode.RefreshRate; }
 
 		STDMETHODIMP GetService(REFGUID guidService, REFIID riid, LPVOID * ppvObject);
+		std::pair<HRESULT, DeviceState> GetDeviceState();
 	private:
 		void CreateDeviceIndependentResources();
 		void CreateDeviceDependentResources();

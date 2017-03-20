@@ -7,6 +7,8 @@
 #include <atomic>
 #include <queue>
 #include "D3D9VideoRenderer.h"
+#include "Scheduler.h"
+#include "ResourceContainer.h"
 
 namespace CES
 {
@@ -23,6 +25,16 @@ namespace CES
 		IMFVideoDeviceID, IMFVideoPresenter, IMFRateSupport, IMFGetService, IMFTopologyServiceLookupClient, IMFVideoDisplayControl>
 	{
 	public:
+		class SampleResource
+		{
+		public:
+			SampleResource();
+
+			IMFSample* Get() const noexcept { return _sample.Get(); }
+		private:
+			WRL::ComPtr<IMFSample> _sample;
+		};
+
 		EVRPresenter();
 
 		// Í¨¹ý RuntimeClass ¼Ì³Ð
@@ -80,6 +92,7 @@ namespace CES
 
 		bool IsActive() const noexcept;
 		void CheckShutdown() const;
+		bool IsScrubbing() const noexcept { return _clockRate == 0; }
 
 		void ConfigureMixer();
 		void Flush();
@@ -89,11 +102,20 @@ namespace CES
 		WRL::ComPtr<IMFMediaType> CreateOptimalVideoType(IMFMediaType* proposedMT);
 		void NotifyEvent(long EventCode, LONG_PTR Param1, LONG_PTR Param2);
 		void ProcessOutput();
+		void ProcessOutputLoop();
 
 		float GetMaxRate(bool thin);
+		void PrepareFrameStep(DWORD steps);
 		void StartFrameStep();
+		void CancelFrameStep();
+		void CompleteFrameStep(IMFSample* sample);
 		void DeliverFrameStepSample(IMFSample* sample);
-		void DeliverSample(IMFSample* sample, bool flag);
+		void DeliverSample(IMFSample* sample, bool repaint);
+
+		void ProcessInputNotify();
+		void BeginStreaming();
+		void EndStreaming();
+		void CheckEndOfStream();
 	private:
 		D3D9VideoRenderer _d3d9Renderer;
 
@@ -107,6 +129,10 @@ namespace CES
 		bool _needRepaint = false;
 		bool _preRolled = false;
 		FrameStep _frameStep;
+		float _clockRate;
+		WRL::ComPtr<Scheduler> _scheduler;
+		bool _sampleNotify;
+		ResourceContainer<SampleResource> _samplesPool;
 	};
 
 	class EVRPresenterActivate : public WRL::RuntimeClass<WRL::RuntimeClassFlags<WRL::ClassicCom>, IMFActivate>
