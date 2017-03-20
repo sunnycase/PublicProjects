@@ -535,6 +535,38 @@ namespace
 		}
 		return sample.Get();
 	}
+
+	void RetireSample(IMFSample* sample, ResourceContainer<EVRPresenter::SampleResource>& container)
+	{
+		UINT64 handle;
+		ThrowIfFailed(sample->GetUINT64(MFSampleExtension_PoolHandle, &handle));
+		container.RetireAndCleanupResource(handle);
+		ThrowIfFailed(sample->DeleteItem(MFSampleExtension_PoolHandle));
+	}
+
+	void SetDesiredSampleTime(IMFSample* sample, MFTIME hnsSampleTime, MFTIME hnsDuration)
+	{
+		ComPtr<IMFDesiredSample> desiredSample;
+		ThrowIfFailed(sample->QueryInterface(IID_PPV_ARGS(&desiredSample)));
+		desiredSample->SetDesiredSampleTimeAndDuration(hnsSampleTime, hnsDuration);
+	}
+
+	void ClearDesiredSampleTime(IMFSample* sample, ResourceContainer<EVRPresenter::SampleResource>& container)
+	{
+		ComPtr<IMFDesiredSample> desiredSample;
+		ThrowIfFailed(sample->QueryInterface(IID_PPV_ARGS(&desiredSample)));
+
+		UINT64 handle;
+		ThrowIfFailed(sample->GetUINT64(MFSampleExtension_PoolHandle, &handle));
+		desiredSample->Clear(); 
+		auto hr = sample->SetUINT64(MFSampleExtension_PoolHandle, handle);
+		if (FAILED(hr))
+		{
+			container.RetireAndCleanupResource(handle);
+			ThrowIfFailed(hr);
+			std::unexpected();
+		}
+	}
 }
 
 EVRPresenter::SampleResource::SampleResource()
@@ -553,9 +585,62 @@ void EVRPresenter::ProcessOutput()
 		ThrowIfFailed(MF_E_INVALIDREQUEST);
 
 	auto sample = AllocateSample(_samplesPool);
+	MFTIME mixerStartTime = 0, mixerEndTime = 0, systemTime = 0;
+	auto repaint = _needRepaint;
 	if (_needRepaint)
 	{
+		SetDesiredSampleTime(sample.Get(), _scheduler->GetLastSampleTime(), _scheduler->GetFrameDuration());
 		_needRepaint = false;
+	}
+	else
+	{
+		ClearDesiredSampleTime(sample.Get(), _samplesPool);
+		if (auto clock = _clock)
+			clock->GetCorrelatedTime(0, &mixerStartTime, &systemTime);
+	}
+
+	MFT_OUTPUT_DATA_BUFFER dataBuffer{};
+	dataBuffer.dwStreamID = 0;
+	dataBuffer.pSample = sample.Get();
+	dataBuffer.dwStatus = 0;
+	auto fin = make_finalizer([&] {if (dataBuffer.pEvents)dataBuffer.pEvents->Release(); });
+
+	DWORD status;
+	auto hr = _mixer->ProcessOutput(0, 1, &dataBuffer, &status);
+	if (FAILED(hr))
+	{
+		RetireSample(sample.Get(), _samplesPool);
+		switch (hr)
+		{
+		case MF_E_TRANSFORM_TYPE_NOT_SET:
+			RenegotiateMediaType();
+			break;
+		case MF_E_TRANSFORM_STREAM_CHANGE:
+			SetMediaType(nullptr);
+			break;
+		case MF_E_TRANSFORM_NEED_MORE_INPUT:
+			_sampleNotify = false;
+			break;
+		default:
+			break;
+		}
+	}
+	else
+	{
+		auto clock = _clock;
+		if (clock && !repaint)
+		{
+			clock->GetCorrelatedTime(0, &mixerEndTime, &systemTime);
+			auto latencyTime = mixerEndTime - mixerStartTime;
+			NotifyEvent(EC_PROCESSING_LATENCY, reinterpret_cast<LONG_PTR>(&latencyTime), 0);
+		}
+		TrackSample(sample.Get());
+		// Schedule the sample.
+		if (_frameStep.State == FrameStepState::None || repaint)
+			DeliverSample(sample.Get(), repaint);
+		else
+			DeliverFrameStepSample(sample.Get());
+		_preRolled = true;
 	}
 }
 
@@ -723,6 +808,10 @@ void EVRPresenter::DeliverSample(IMFSample * sample, bool repaint)
 		NotifyEvent(EC_ERRORABORT, hr, 0);
 	else if(deviceState.second == D3D9VideoRenderer::DeviceState::Reset)
 		NotifyEvent(EC_DISPLAY_CHANGED, S_OK, 0);
+}
+
+void CES::EVRPresenter::TrackSample(IMFSample * sample)
+{
 }
 
 void EVRPresenter::ProcessInputNotify()

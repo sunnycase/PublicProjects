@@ -22,6 +22,9 @@ namespace CES
 		void StartScheduler(IMFClock* clock);
 		void StopScheduler();
 		void ScheduleSample(IMFSample* sample, bool presentNow);
+
+		MFTIME GetLastSampleTime() const noexcept { return _lastSampleTime; }
+		MFTIME GetFrameDuration() const noexcept { return _perFrameInterval; }
 	private:
 		void ProcessSample(IMFSample* sample);
 	private:
@@ -29,5 +32,7 @@ namespace CES
 		WRL::Wrappers::CriticalSection _stateLock;
 		std::shared_ptr<NS_CORE::OperationQueue<PreparedSample>> _samplesQueue;
 		WRL::ComPtr<IMFClock> _clock;
+		MFTIME _lastSampleTime;
+		MFTIME _perFrameInterval;
 	};
 }

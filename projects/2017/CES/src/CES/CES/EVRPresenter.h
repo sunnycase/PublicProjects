@@ -111,6 +111,7 @@ namespace CES
 		void CompleteFrameStep(IMFSample* sample);
 		void DeliverFrameStepSample(IMFSample* sample);
 		void DeliverSample(IMFSample* sample, bool repaint);
+		void TrackSample(IMFSample* sample);
 
 		void ProcessInputNotify();
 		void BeginStreaming();
