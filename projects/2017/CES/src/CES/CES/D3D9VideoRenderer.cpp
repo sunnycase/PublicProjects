@@ -100,6 +100,39 @@ namespace
 		DXVA2_VideoProcess_StretchY |
 		DXVA2_VideoProcess_SubRects |
 		DXVA2_VideoProcess_SubStreams;
+
+	const DWORD PRESENTER_BUFFER_COUNT = 3;
+}
+
+void CES::D3D9VideoRenderer::CreateVideoSamples(IMFMediaType * mediaType, SamplePool& samplePool)
+{
+	ThrowIfNot(_videoHWnd, L"Vidoe window is not set.");
+
+	LOCK_STATE();
+	UINT32 width, height;
+	ThrowIfFailed(MFGetAttributeSize(mediaType, MF_MT_FRAME_SIZE, &width, &height));
+
+	_mixerSurfaces.clear();
+	_mixerSurfaces.resize(PRESENTER_BUFFER_COUNT);
+	ThrowIfFailed(_videoService->CreateSurface(width, height, PRESENTER_BUFFER_COUNT - 1, VIDEO_RENDER_TARGET_FORMAT,
+		_videoProcessorCaps.InputPool, 0, DXVA_RENDER_TARGET, reinterpret_cast<IDirect3DSurface9**>(_mixerSurfaces.data()), nullptr));
+
+	static const auto blackColor = D3DCOLOR_ARGB(0xFF, 0x00, 0x00, 0x00);
+	std::vector<WRL::ComPtr<IMFSample>> samples;
+	samples.reserve(PRESENTER_BUFFER_COUNT);
+	for (auto& surface : _mixerSurfaces)
+	{
+		ThrowIfFailed(_d3dDevice->ColorFill(surface.Get(), nullptr, blackColor));
+		ComPtr<IMFSample> sample;
+		ThrowIfFailed(MFCreateVideoSampleFromSurface(surface.Get(), &sample));
+		ThrowIfFailed(sample->SetUINT32(MFSampleExtension_CleanPoint, 0));
+		samples.emplace_back(std::move(sample));
+	}
+	samplePool.AssignSamples(samples.begin(), samples.end());
+}
+
+void CES::D3D9VideoRenderer::PresentSample(IMFSample * sample, MFTIME hnsTarget, MFTIME hnsTimeDelta, size_t remainingInQueue, MFTIME hnsFrameDurationDiv4)
+{
 }
 
 void CES::D3D9VideoRenderer::CreateDeviceIndependentResources()

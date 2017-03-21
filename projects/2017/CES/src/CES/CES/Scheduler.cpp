@@ -43,10 +43,46 @@ void CES::Scheduler::ScheduleSample(IMFSample * sample, bool presentNow)
 		_samplesQueue->Enqueue(PreparedSample{ sample });
 }
 
+void CES::Scheduler::SetSamplePresenter(ISamplePresenter * presenter)
+{
+	_samplePresenter = presenter;
+}
+
 void CES::Scheduler::ProcessSample(IMFSample* sample)
 {
 	if (auto clock = _clock)
 	{
 		OutputDebugString(L"Process sample.\r\n");
+
+		MFTIME hnsPresentationTime = 0;
+		MFTIME hnsTimeNow = 0;
+		MFTIME hnsSystemTime = 0;
+		bool presentNow = false;
+
+		if (SUCCEEDED(sample->GetSampleTime(&hnsPresentationTime)))
+			clock->GetCorrelatedTime(0, &hnsTimeNow, &hnsSystemTime);
+		auto hnsDelta = hnsPresentationTime - hnsTimeNow;
+		auto rate = GetClockRate();
+		if (rate < 0)
+			hnsDelta = -hnsDelta;
+		if(std::abs(rate) > 2)
+			if (std::abs(hnsDelta) > _perFrameInterval * GetFrameDropThrehold())
+			{
+				OutputDebugString(L"Drop frame.\r\n");
+				return;
+			}
+		if (hnsDelta < _perFrame1_4th)
+			presentNow = true;
+		else if (hnsDelta > 3 * _perFrame1_4th)
+		{
+			presentNow = false;
+		}
+		if (presentNow)
+		{
+			if (auto sp = _samplePresenter)
+				sp->PresentSample(sample, hnsPresentationTime, hnsDelta, _samplesQueue->GetRemainingOperationsCount(), _perFrame1_4th);
+		}
+		else
+			_samplesQueue->Enqueue(PreparedSample{ sample });
 	}
 }

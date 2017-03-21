@@ -9,8 +9,10 @@ using namespace CES;
 
 EVRPresenter::EVRPresenter()
 	:_state(EVRPresenterState::NotInitialized), _normalizedVideoSrc({ 0, 0, 1, 1 }),
-	_scheduler(Make<Scheduler>())
+	_scheduler(Make<Scheduler>()), _d3d9Renderer(Make<D3D9VideoRenderer>()),
+	_freeSampleCallback(Make<NS_MEDIA::MFAsyncCallbackWithWeakRef<EVRPresenter>>(AsWeak(), &EVRPresenter::OnSampleFree))
 {
+	_scheduler->SetSamplePresenter(_d3d9Renderer.Get());
 }
 
 HRESULT EVRPresenter::GetDeviceID(IID * pDeviceID)
@@ -188,13 +190,13 @@ HRESULT EVRPresenter::GetService(REFGUID guidService, REFIID riid, LPVOID * ppvO
 {
 	if (guidService == MR_VIDEO_RENDER_SERVICE)
 	{
-		auto hr = _d3d9Renderer.GetService(guidService, riid, ppvObject);
+		auto hr = _d3d9Renderer->GetService(guidService, riid, ppvObject);
 		if (FAILED(hr))
 			hr = QueryInterface(riid, ppvObject);
 		return hr;
 	}
 	else if (guidService != MR_VIDEO_ACCELERATION_SERVICE)
-		return _d3d9Renderer.GetService(guidService, riid, ppvObject);
+		return _d3d9Renderer->GetService(guidService, riid, ppvObject);
 	return MF_E_UNSUPPORTED_SERVICE;
 }
 
@@ -304,10 +306,10 @@ HRESULT EVRPresenter::SetVideoPosition(const MFVideoNormalizedRect * pnrcSource,
 		// Update the destination rectangle.
 		if (prcDest)
 		{
-			auto oldDestRect = _d3d9Renderer.GetDestinationRect();
+			auto oldDestRect = _d3d9Renderer->GetDestinationRect();
 			if (oldDestRect != *prcDest)
 			{
-				_d3d9Renderer.SetDestinationRect(*prcDest);
+				_d3d9Renderer->SetDestinationRect(*prcDest);
 				if (_mixer)
 				{
 					HRESULT hr = S_OK;
@@ -340,7 +342,7 @@ HRESULT EVRPresenter::GetVideoPosition(MFVideoNormalizedRect * pnrcSource, LPREC
 		LOCK_STATE();
 
 		*pnrcSource = _normalizedVideoSrc;
-		*prcDest = _d3d9Renderer.GetDestinationRect();
+		*prcDest = _d3d9Renderer->GetDestinationRect();
 		return S_OK;
 	}
 	TCATCH_ALL();
@@ -361,10 +363,10 @@ HRESULT EVRPresenter::SetVideoWindow(HWND hwndVideo)
 	try
 	{
 		LOCK_STATE();
-		auto oldhWnd = _d3d9Renderer.GetVideoWindow();
+		auto oldhWnd = _d3d9Renderer->GetVideoWindow();
 		if (oldhWnd != hwndVideo)
 		{
-			_d3d9Renderer.SetVideoWindow(hwndVideo);
+			_d3d9Renderer->SetVideoWindow(hwndVideo);
 			NotifyEvent(EC_DISPLAY_CHANGED, 0, 0);
 		}
 		return S_OK;
@@ -377,7 +379,7 @@ HRESULT EVRPresenter::GetVideoWindow(HWND * phwndVideo)
 	try
 	{
 		LOCK_STATE();
-		*phwndVideo = _d3d9Renderer.GetVideoWindow();
+		*phwndVideo = _d3d9Renderer->GetVideoWindow();
 		return S_OK;
 	}
 	TCATCH_ALL();
@@ -417,7 +419,7 @@ HRESULT EVRPresenter::SetFullscreen(BOOL fFullscreen)
 {
 	try
 	{
-		_d3d9Renderer.SetFullscreen(fFullscreen);
+		_d3d9Renderer->SetFullscreen(fFullscreen);
 		return S_OK;
 	}
 	TCATCH_ALL();
@@ -425,7 +427,7 @@ HRESULT EVRPresenter::SetFullscreen(BOOL fFullscreen)
 
 HRESULT EVRPresenter::GetFullscreen(BOOL * pfFullscreen)
 {
-	*pfFullscreen = _d3d9Renderer.GetFullscreen();
+	*pfFullscreen = _d3d9Renderer->GetFullscreen();
 	return S_OK;
 }
 
@@ -457,16 +459,46 @@ void EVRPresenter::Flush()
 {
 }
 
+namespace
+{
+	bool AreMediaTypesEqual(IMFMediaType *pType1, IMFMediaType *pType2)
+	{
+		if ((pType1 == NULL) && (pType2 == NULL))
+			return true; // Both are NULL.
+		else if ((pType1 == NULL) || (pType2 == NULL))
+			return false; // One is NULL.
+
+		DWORD dwFlags = 0;
+		HRESULT hr = pType1->IsEqual(pType2, &dwFlags);
+
+		return (hr == S_OK);
+	}
+}
+
 void EVRPresenter::SetMediaType(IMFMediaType * mediaType)
 {
 	if (!mediaType)
 	{
 		_mediaType.Reset();
+		return;
+	}
+
+	CheckShutdown();
+	if (AreMediaTypesEqual(mediaType, _mediaType.Get()))
+		return;
+
+	_d3d9Renderer->CreateVideoSamples(mediaType, _samplePool);
+	MFRatio fps;
+	if (SUCCEEDED(mediaType->GetUINT64(MF_MT_FRAME_RATE, reinterpret_cast<UINT64*>(&fps))) &&
+		fps.Denominator && fps.Numerator)
+	{
+
 	}
 	else
 	{
-		_mediaType = mediaType;
+
 	}
+	_mediaType = mediaType;
 }
 
 void EVRPresenter::RenegotiateMediaType()
@@ -515,63 +547,12 @@ void EVRPresenter::NotifyEvent(long EventCode, LONG_PTR Param1, LONG_PTR Param2)
 
 namespace
 {
-#define INITGUID
-#include <guiddef.h>
-
-	// {ADE43674-0887-4F9B-B3CB-78AE8EB9807D}   MFSampleExtension_PoolHandle          {UINT64 (UINT_PTR)}
-	DEFINE_GUID(MFSampleExtension_PoolHandle,
-		0xade43674, 0x887, 0x4f9b, 0xb3, 0xcb, 0x78, 0xae, 0x8e, 0xb9, 0x80, 0x7d);
-
-	ComPtr<IMFSample> AllocateSample(ResourceContainer<EVRPresenter::SampleResource>& container)
-	{
-		auto handle = container.Allocate();
-		auto sample = container.FindResource(handle);
-		auto hr = sample.Get()->SetUINT64(MFSampleExtension_PoolHandle, handle);
-		if (FAILED(hr))
-		{
-			container.RetireAndCleanupResource(handle);
-			ThrowIfFailed(hr);
-			std::unexpected();
-		}
-		return sample.Get();
-	}
-
-	void RetireSample(IMFSample* sample, ResourceContainer<EVRPresenter::SampleResource>& container)
-	{
-		UINT64 handle;
-		ThrowIfFailed(sample->GetUINT64(MFSampleExtension_PoolHandle, &handle));
-		container.RetireAndCleanupResource(handle);
-		ThrowIfFailed(sample->DeleteItem(MFSampleExtension_PoolHandle));
-	}
-
 	void SetDesiredSampleTime(IMFSample* sample, MFTIME hnsSampleTime, MFTIME hnsDuration)
 	{
 		ComPtr<IMFDesiredSample> desiredSample;
 		ThrowIfFailed(sample->QueryInterface(IID_PPV_ARGS(&desiredSample)));
 		desiredSample->SetDesiredSampleTimeAndDuration(hnsSampleTime, hnsDuration);
 	}
-
-	void ClearDesiredSampleTime(IMFSample* sample, ResourceContainer<EVRPresenter::SampleResource>& container)
-	{
-		ComPtr<IMFDesiredSample> desiredSample;
-		ThrowIfFailed(sample->QueryInterface(IID_PPV_ARGS(&desiredSample)));
-
-		UINT64 handle;
-		ThrowIfFailed(sample->GetUINT64(MFSampleExtension_PoolHandle, &handle));
-		desiredSample->Clear(); 
-		auto hr = sample->SetUINT64(MFSampleExtension_PoolHandle, handle);
-		if (FAILED(hr))
-		{
-			container.RetireAndCleanupResource(handle);
-			ThrowIfFailed(hr);
-			std::unexpected();
-		}
-	}
-}
-
-EVRPresenter::SampleResource::SampleResource()
-{
-	
 }
 
 void EVRPresenter::ProcessOutput()
@@ -584,7 +565,9 @@ void EVRPresenter::ProcessOutput()
 	if (!_mixer)
 		ThrowIfFailed(MF_E_INVALIDREQUEST);
 
-	auto sample = AllocateSample(_samplesPool);
+	ComPtr<IMFSample> sample;
+	if (!_samplePool.TryGetSample(&sample))
+		return;
 	MFTIME mixerStartTime = 0, mixerEndTime = 0, systemTime = 0;
 	auto repaint = _needRepaint;
 	if (_needRepaint)
@@ -594,7 +577,7 @@ void EVRPresenter::ProcessOutput()
 	}
 	else
 	{
-		ClearDesiredSampleTime(sample.Get(), _samplesPool);
+		_samplePool.ClearDesiredSampleTime(sample.Get());
 		if (auto clock = _clock)
 			clock->GetCorrelatedTime(0, &mixerStartTime, &systemTime);
 	}
@@ -609,7 +592,7 @@ void EVRPresenter::ProcessOutput()
 	auto hr = _mixer->ProcessOutput(0, 1, &dataBuffer, &status);
 	if (FAILED(hr))
 	{
-		RetireSample(sample.Get(), _samplesPool);
+		_samplePool.ReturnSample(sample.Get());
 		switch (hr)
 		{
 		case MF_E_TRANSFORM_TYPE_NOT_SET:
@@ -673,7 +656,7 @@ float EVRPresenter::GetMaxRate(bool thin)
 	if (!thin && _mediaType)
 	{
 		ThrowIfFailed(_mediaType->GetUINT64(MF_MT_FRAME_RATE, reinterpret_cast<UINT64*>(&fps)));
-		MonitorRateHz = _d3d9Renderer.GetRefreshRate();
+		MonitorRateHz = _d3d9Renderer->GetRefreshRate();
 		
 		if (fps.Denominator && fps.Numerator && MonitorRateHz)
 		{
@@ -722,6 +705,7 @@ void EVRPresenter::CancelFrameStep()
 {
 	auto oldState = _frameStep.State;
 	_frameStep.State = FrameStepState::None;
+	_frameStep.SampleNoRef = nullptr;
 	_frameStep.Steps = 0;
 	if (oldState > FrameStepState::None && oldState < FrameStepState::Complete)
 		NotifyEvent(EC_STEP_COMPLETE, TRUE, 0);
@@ -731,6 +715,7 @@ void EVRPresenter::CompleteFrameStep(IMFSample * sample)
 {
 	MFTIME hnsSampleTime = 0;
 
+	_frameStep.SampleNoRef = nullptr;
 	_frameStep.State = FrameStepState::Complete;
 	NotifyEvent(EC_STEP_COMPLETE, FALSE, 0);
 	if (IsScrubbing())
@@ -791,6 +776,7 @@ void EVRPresenter::DeliverFrameStepSample(IMFSample * sample)
 		else
 		{
 			DeliverSample(sample, false);
+			_frameStep.SampleNoRef = sample;
 			_frameStep.State = FrameStepState::Scheduled;
 		}
 	}
@@ -800,7 +786,7 @@ void EVRPresenter::DeliverSample(IMFSample * sample, bool repaint)
 {
 	auto state = D3D9VideoRenderer::DeviceState::Ok;
 	auto presentNow = _state != EVRPresenterState::Started || IsScrubbing() || repaint;
-	auto deviceState = _d3d9Renderer.GetDeviceState();
+	auto deviceState = _d3d9Renderer->GetDeviceState();
 	auto hr = deviceState.first;
 	if (SUCCEEDED(hr))
 		_scheduler->ScheduleSample(sample, presentNow);
@@ -810,8 +796,36 @@ void EVRPresenter::DeliverSample(IMFSample * sample, bool repaint)
 		NotifyEvent(EC_DISPLAY_CHANGED, S_OK, 0);
 }
 
-void CES::EVRPresenter::TrackSample(IMFSample * sample)
+void EVRPresenter::TrackSample(IMFSample * sample)
 {
+	ComPtr<IMFTrackedSample> trackedSample;
+	ThrowIfFailed(sample->QueryInterface(IID_PPV_ARGS(&trackedSample)));
+	ThrowIfFailed(trackedSample->SetAllocator(_freeSampleCallback.Get(), nullptr));
+}
+
+void EVRPresenter::OnSampleFree(IMFAsyncResult * pAsyncResult)
+{
+	auto hr = S_OK;
+	try
+	{
+		ComPtr<IUnknown> sampleUnk;
+		ThrowIfFailed(pAsyncResult->GetObject(&sampleUnk));
+		ComPtr<IMFSample> sample;
+		ThrowIfFailed(sampleUnk.As(&sample));
+
+		LOCK_STATE();
+		if (_frameStep.State == FrameStepState::Scheduled)
+		{
+			if (_frameStep.SampleNoRef == sample.Get())
+				CompleteFrameStep(sample.Get());
+			_samplePool.ReturnSample(sample.Get());
+			ProcessOutputLoop();
+		}
+	}
+	CATCH_ALL_WITHHR(hr);
+	if (FAILED(hr))
+		NotifyEvent(EC_ERRORABORT, hr, 0);
+	ThrowIfFailed(hr);
 }
 
 void EVRPresenter::ProcessInputNotify()
@@ -833,7 +847,7 @@ void EVRPresenter::EndStreaming()
 	_scheduler->StopScheduler();
 }
 
-void CES::EVRPresenter::CheckEndOfStream()
+void EVRPresenter::CheckEndOfStream()
 {
 }
 

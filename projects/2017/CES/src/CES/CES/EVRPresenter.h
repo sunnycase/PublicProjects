@@ -1,5 +1,7 @@
 #pragma once
 #include <Tomato.Core/Tomato.Core.h>
+#include <Tomato.Core/WeakReferenceBase.h>
+#include <Tomato.Media/MFAsyncCallback.h>
 #include <mfidl.h>
 #include <evr.h>
 #include <d3d9.h>
@@ -8,7 +10,7 @@
 #include <queue>
 #include "D3D9VideoRenderer.h"
 #include "Scheduler.h"
-#include "ResourceContainer.h"
+#include "SamplePool.h"
 
 namespace CES
 {
@@ -21,19 +23,10 @@ namespace CES
 		Shutdown
 	};
 
-	class EVRPresenter : public WRL::RuntimeClass<WRL::RuntimeClassFlags<WRL::ClassicCom>,
+	class EVRPresenter : public NS_CORE::WeakReferenceBase<EVRPresenter, WRL::RuntimeClassFlags<WRL::ClassicCom>,
 		IMFVideoDeviceID, IMFVideoPresenter, IMFRateSupport, IMFGetService, IMFTopologyServiceLookupClient, IMFVideoDisplayControl>
 	{
 	public:
-		class SampleResource
-		{
-		public:
-			SampleResource();
-
-			IMFSample* Get() const noexcept { return _sample.Get(); }
-		private:
-			WRL::ComPtr<IMFSample> _sample;
-		};
 
 		EVRPresenter();
 
@@ -80,14 +73,14 @@ namespace CES
 		
 		struct FrameStep
 		{
-			FrameStep() : State(FrameStepState::None), Steps(0), pSampleNoRef(NULL)
+			FrameStep() : State(FrameStepState::None), Steps(0), SampleNoRef(nullptr)
 			{
 			}
 
 			FrameStepState     State;          // Current frame-step state.
 			std::queue<WRL::ComPtr<IMFSample>>     Samples;        // List of pending samples for frame-stepping.
 			DWORD               Steps;          // Number of steps left.
-			DWORD_PTR           pSampleNoRef;   // Identifies the frame-step sample.
+			IMFSample*          SampleNoRef;   // Identifies the frame-step sample.
 		};
 
 		bool IsActive() const noexcept;
@@ -112,13 +105,14 @@ namespace CES
 		void DeliverFrameStepSample(IMFSample* sample);
 		void DeliverSample(IMFSample* sample, bool repaint);
 		void TrackSample(IMFSample* sample);
+		void OnSampleFree(IMFAsyncResult* pAsyncResult);
 
 		void ProcessInputNotify();
 		void BeginStreaming();
 		void EndStreaming();
 		void CheckEndOfStream();
 	private:
-		D3D9VideoRenderer _d3d9Renderer;
+		WRL::ComPtr<D3D9VideoRenderer> _d3d9Renderer;
 
 		std::atomic<EVRPresenterState> _state;
 		WRL::Wrappers::CriticalSection _stateLock;
@@ -133,7 +127,8 @@ namespace CES
 		float _clockRate;
 		WRL::ComPtr<Scheduler> _scheduler;
 		bool _sampleNotify;
-		ResourceContainer<SampleResource> _samplesPool;
+		SamplePool _samplePool;
+		WRL::ComPtr<NS_MEDIA::MFAsyncCallbackWithWeakRef<EVRPresenter>> _freeSampleCallback;
 	};
 
 	class EVRPresenterActivate : public WRL::RuntimeClass<WRL::RuntimeClassFlags<WRL::ClassicCom>, IMFActivate>
