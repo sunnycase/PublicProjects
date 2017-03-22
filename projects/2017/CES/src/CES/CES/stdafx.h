@@ -32,3 +32,5 @@
 #include <mfidl.h>
 #include <mfapi.h>
 #include <Mferror.h>
+#include <afxwin.h>
+#include <afxcontrolbars.h>

@@ -114,7 +114,7 @@ void CameraPipeline::ProcessSessionTopologyStatus(IMFMediaEvent * event)
 	{
 		DXVA2_ValueRange saturationRange;
 		ThrowIfFailed(_videoProcessor->GetProcAmpRange(DXVA2_ProcAmp_Saturation, &saturationRange));
-
+		//_videoDispCtrl->GetCurrentImage()
 		DXVA2_ProcAmpValues values{};
 
 		// 文件、单据、证件: 黑白
@@ -123,19 +123,6 @@ void CameraPipeline::ProcessSessionTopologyStatus(IMFMediaEvent * event)
 		else
 			values.Saturation = saturationRange.DefaultValue;
 		ThrowIfFailed(_videoProcessor->SetProcAmpValues(DXVA2_ProcAmp_Saturation, &values));
-
-		ComPtr<IDirect3DDeviceManager9> deviceManager;
-		ThrowIfFailed(MFGetService(_mediaSession.Get(), MR_VIDEO_ACCELERATION_SERVICE, IID_PPV_ARGS(&deviceManager)));
-
-		HANDLE handle = reinterpret_cast<HANDLE>(1);
-		//ThrowIfFailed(deviceManager->OpenDeviceHandle(&handle));
-		ComPtr<IDirect3DDevice9> device;
-		ThrowIfFailed(deviceManager->LockDevice(handle, &device, TRUE));
-		DirectX::XMFLOAT4X4 mat;
-		DirectX::XMStoreFloat4x4(&mat, DirectX::XMMatrixTranspose(DirectX::XMMatrixTranslation(100, 100, 0)));
-		
-		ThrowIfFailed(device->SetTransform(D3DTS_WORLD, reinterpret_cast<D3DMATRIX*>(&mat)));
-		ThrowIfFailed(deviceManager->UnlockDevice(handle, TRUE));
 	}
 }
 
@@ -158,6 +145,27 @@ void CameraPipeline::Start()
 	_operationQueue->Enqueue(std::make_shared<CameraPipelineOperation>(CameraPipelineOperationKind::Start));
 }
 
+#define DIB_WIDTHBYTES(bits) ((((bits) + 31)>>5)<<2)
+
+WRL::ComPtr<IWICBitmap> CES::CameraPipeline::TakePicture()
+{
+	auto dispCtrl = _videoDispCtrl;
+	ThrowIfNot(dispCtrl, L"扫描未开始。");
+
+	BITMAPINFOHEADER biHeader{};
+	biHeader.biSize = sizeof(biHeader);
+	unique_cotaskmem_arr<BYTE> bitmapData;
+	DWORD dataSize;
+	LONGLONG timestamp;
+	ThrowIfFailed(dispCtrl->GetCurrentImage(&biHeader, &bitmapData._Myptr(), &dataSize, &timestamp));
+
+	auto stride = dataSize / biHeader.biHeight;
+	ComPtr<IWICBitmap> bitmap;
+	ThrowIfFailed(_wicFactory->CreateBitmapFromMemory(biHeader.biWidth, biHeader.biWidth, 
+		GUID_WICPixelFormat32bppBGR, stride, dataSize, bitmapData.get(), &bitmap));
+	return bitmap;
+}
+
 void CameraPipeline::CreateDeviceDependentResources()
 {
 	ComPtr<IMFAttributes> attributes;
@@ -178,7 +186,7 @@ void CameraPipeline::CreateDeviceDependentResources()
 
 void CameraPipeline::CreateDeviceIndependentResources()
 {
-
+	ThrowIfFailed(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC, IID_PPV_ARGS(&_wicFactory)));
 }
 
 void CameraPipeline::CreateSession()
@@ -238,11 +246,10 @@ namespace
 
 		GUID majorType;
 		ThrowIfFailed(mtHandler->GetMajorType(&majorType));
+		ComPtr<IMFMediaType> mediaType;
 		if (majorType == MFMediaType_Video)
 		{
 			ThrowIfFailed(MFCreateVideoRendererActivate(hWnd, activate));
-			auto evr = Make<EVRPresenterActivate>();
-			ThrowIfFailed((*activate)->SetUnknown(MF_ACTIVATE_CUSTOM_VIDEO_PRESENTER_ACTIVATE, evr.Get()));
 			return true;
 		}
 		return false;

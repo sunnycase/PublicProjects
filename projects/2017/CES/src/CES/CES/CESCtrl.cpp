@@ -17,12 +17,15 @@ IMPLEMENT_DYNCREATE(CCESCtrl, COleControl)
 BEGIN_MESSAGE_MAP(CCESCtrl, COleControl)
 	ON_OLEVERB(AFX_IDS_VERB_EDIT, OnEdit)
 	ON_OLEVERB(AFX_IDS_VERB_PROPERTIES, OnProperties)
+	ON_WM_CREATE()
 END_MESSAGE_MAP()
 
 // 调度映射
 
 BEGIN_DISPATCH_MAP(CCESCtrl, COleControl)
 	DISP_FUNCTION_ID(CCESCtrl, "AboutBox", DISPID_ABOUTBOX, AboutBox, VT_EMPTY, VTS_NONE)
+	DISP_FUNCTION_ID(CCESCtrl, "StartScanning", dispidStartScanning, StartScanning, VT_EMPTY, VTS_NONE)
+	DISP_FUNCTION_ID(CCESCtrl, "TakePicture", dispidTakePicture, TakePicture, VT_EMPTY, VTS_NONE)
 END_DISPATCH_MAP()
 
 // 事件映射
@@ -42,23 +45,23 @@ END_PROPPAGEIDS(CCESCtrl)
 IMPLEMENT_OLECREATE_EX(CCESCtrl, "CES.CESCtrl.1",
 	0x360fb522, 0xfe3e, 0x42cc, 0xb5, 0x6d, 0xca, 0x76, 0x7f, 0x41, 0x99, 0x87)
 
-// 键入库 ID 和版本
+	// 键入库 ID 和版本
 
-IMPLEMENT_OLETYPELIB(CCESCtrl, _tlid, _wVerMajor, _wVerMinor)
+	IMPLEMENT_OLETYPELIB(CCESCtrl, _tlid, _wVerMajor, _wVerMinor)
 
-// 接口 ID
+	// 接口 ID
 
-const IID IID_DCES = { 0x799CD45C, 0x8E8A, 0x4743, { 0x86, 0xF3, 0xDA, 0x47, 0xA5, 0x83, 0x77, 0x2F } };
+	const IID IID_DCES = { 0x799CD45C, 0x8E8A, 0x4743, { 0x86, 0xF3, 0xDA, 0x47, 0xA5, 0x83, 0x77, 0x2F } };
 const IID IID_DCESEvents = { 0x730372C9, 0xD823, 0x4353, { 0x9C, 0x30, 0x23, 0xD1, 0xE6, 0xA4, 0x56, 0xD9 } };
 
 // 控件类型信息
 
 static const DWORD _dwCESOleMisc =
-	OLEMISC_ACTIVATEWHENVISIBLE |
-	OLEMISC_SETCLIENTSITEFIRST |
-	OLEMISC_INSIDEOUT |
-	OLEMISC_CANTLINKINSIDE |
-	OLEMISC_RECOMPOSEONRESIZE;
+OLEMISC_ACTIVATEWHENVISIBLE |
+OLEMISC_SETCLIENTSITEFIRST |
+OLEMISC_INSIDEOUT |
+OLEMISC_CANTLINKINSIDE |
+OLEMISC_RECOMPOSEONRESIZE;
 
 IMPLEMENT_OLECTLTYPE(CCESCtrl, IDS_CES, _dwCESOleMisc)
 
@@ -97,8 +100,6 @@ CCESCtrl::CCESCtrl()
 	InitializeIIDs(&IID_DCES, &IID_DCESEvents);
 	//__debugbreak();
 	// TODO:  在此初始化控件的实例数据。
-	_cameraPipeline = WRL::Make<CES::CameraPipeline>();
-	_cameraPipeline->DeviceReady.Subscribe([=] { _cameraPipeline->Start(); });
 }
 
 // CCESCtrl::~CCESCtrl - 析构函数
@@ -111,20 +112,12 @@ CCESCtrl::~CCESCtrl()
 // CCESCtrl::OnDraw - 绘图函数
 
 void CCESCtrl::OnDraw(
-			CDC* pdc, const CRect& rcBounds, const CRect& /* rcInvalid */)
+	CDC* pdc, const CRect& rcBounds, const CRect& /* rcInvalid */)
 {
 	if (!pdc)
 		return;
 
-	// TODO:  用您自己的绘图代码替换下面的代码。
 	pdc->FillRect(rcBounds, CBrush::FromHandle((HBRUSH)GetStockObject(BLACK_BRUSH)));
-	pdc->Ellipse(rcBounds);
-	static bool loaded = false;
-	if (!loaded)
-	{
-		_cameraPipeline->OpenCamera(CES::CameraSource::Scanner, m_hWnd);
-		loaded = true;
-	}
 }
 
 // CCESCtrl::DoPropExchange - 持久性支持
@@ -173,3 +166,58 @@ void CCESCtrl::AboutBox()
 
 
 // CCESCtrl 消息处理程序
+
+void CCESCtrl::SetViewState(ViewState state)
+{
+	if (state == ViewState::Video)
+	{
+		_videoBox.ShowWindow(SW_SHOW);
+		_imageWnd.ShowWindow(SW_HIDE);
+	}
+	else
+	{
+		_videoBox.ShowWindow(SW_HIDE);
+		_imageWnd.ShowWindow(SW_SHOW);
+	}
+}
+
+int CCESCtrl::OnCreate(LPCREATESTRUCT lpCreateStruct)
+{
+	if (COleControl::OnCreate(lpCreateStruct) == -1)
+		return -1;
+	RECT rect;
+	GetClientRect(&rect);
+	ThrowIfNot(_videoBox.Create(nullptr, WS_CHILD | WS_VISIBLE, rect, this), L"cannot init window.");
+	ThrowIfNot(_imageWnd.Create(nullptr, WS_CHILD, rect, this), L"cannot init window.");
+	return 0;
+}
+
+
+void CCESCtrl::StartScanning()
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	if (!_cameraPipeline)
+	{
+		_cameraPipeline = WRL::Make<CES::CameraPipeline>();
+		_cameraPipeline->DeviceReady.Subscribe([=] { _cameraPipeline->Start(); });
+
+		_cameraPipeline->OpenCamera(CES::CameraSource::Scanner, _videoBox.GetSafeHwnd());
+	}
+
+	SetViewState(ViewState::Video);
+}
+
+
+void CCESCtrl::TakePicture()
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	if (!_cameraPipeline)
+		ThrowIfFailed(E_NOT_VALID_STATE);
+
+	auto bitmap = _cameraPipeline->TakePicture();
+	_imageWnd.SetPicture(bitmap.Get());
+	
+	SetViewState(ViewState::Image);
+}

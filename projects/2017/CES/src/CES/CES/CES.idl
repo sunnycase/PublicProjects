@@ -23,6 +23,8 @@ library CESLib
 		methods:
 
 			[id(DISPID_ABOUTBOX)] void AboutBox();
+			[id(1)] void StartScanning();
+			[id(2)] void TakePicture();
 	};
 
 	//  CCESCtrl 的事件调度接口

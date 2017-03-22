@@ -6,6 +6,7 @@
 #include <evr.h>
 #include <d3d9.h>
 #include <evr9.h>
+#include <wincodec.h>
 
 namespace CES
 {
@@ -102,6 +103,7 @@ namespace CES
 
 		void OpenCamera(CameraSource source, HWND videohWnd);
 		void Start();
+		WRL::ComPtr<IWICBitmap> TakePicture();
 
 		Event<void()> DeviceReady;
 	private:
@@ -125,5 +127,6 @@ namespace CES
 		CameraSource _source;
 		WRL::ComPtr<NS_MEDIA::MFAsyncCallbackWithWeakRef<CameraPipeline>> _mediaSessionAsyncCallback;
 		std::shared_ptr<NS_CORE::OperationQueue<std::shared_ptr<CameraPipelineOperation>>> _operationQueue;
+		WRL::ComPtr<IWICImagingFactory> _wicFactory;
 	};
 }

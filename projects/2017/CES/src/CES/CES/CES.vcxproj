@@ -108,7 +108,7 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;Dxva2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;Dxva2.lib;d2d1.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -230,6 +230,7 @@
     <ClCompile Include="D3D9VideoRenderer.cpp" />
     <ClCompile Include="EVRPresenter.cpp" />
     <ClCompile Include="FreeList.cpp" />
+    <ClCompile Include="ImageBox.cpp" />
     <ClCompile Include="MFWorkerQueueProvider.cpp" />
     <ClCompile Include="Scheduler.cpp" />
     <ClCompile Include="stdafx.cpp">
@@ -238,6 +239,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="VideoBox.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CameraPipeline.h" />
@@ -247,11 +249,13 @@
     <ClInclude Include="CESPropPage.h" />
     <ClInclude Include="D3D9VideoRenderer.h" />
     <ClInclude Include="EVRPresenter.h" />
+    <ClInclude Include="ImageBox.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="ResourceContainer.h" />
     <ClInclude Include="Scheduler.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="VideoBox.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="CES.def" />

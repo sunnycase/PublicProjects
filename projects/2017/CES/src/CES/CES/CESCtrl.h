@@ -1,5 +1,7 @@
 #pragma once
 #include "CameraPipeline.h"
+#include "VideoBox.h"
+#include "ImageBox.h"
 
 // CESCtrl.h : CCESCtrl ActiveX 控件类的声明。
 
@@ -44,8 +46,26 @@ protected:
 // 调度和事件 ID
 public:
 	enum {
+		dispidTakePicture = 2L,
+		dispidStartScanning = 1L
 	};
 private:
+	enum class ViewState
+	{
+		Video,
+		Image
+	};
+
+	void SetViewState(ViewState state);
+	
+private:
 	WRL::ComPtr<CES::CameraPipeline> _cameraPipeline;
+	CVideoBox _videoBox;
+	CImageBox _imageWnd;
+public:
+	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
+protected:
+	void StartScanning();
+	void TakePicture();
 };
 

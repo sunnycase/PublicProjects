@@ -15,5 +15,23 @@ namespace CESClient
         {
             InitializeComponent();
         }
+
+        bool _isScanning = false;
+
+        private void bn_ScanOrTakePicture_Click(object sender, EventArgs e)
+        {
+            if(_isScanning)
+            {
+                bn_ScanOrTakePicture.Text = "开始扫描";
+                ax_CES.TakePicture();
+                _isScanning = false;
+            }
+            else
+            {
+                bn_ScanOrTakePicture.Text = "拍照";
+                ax_CES.StartScanning();
+                _isScanning = true;
+            }
+        }
     }
 }
