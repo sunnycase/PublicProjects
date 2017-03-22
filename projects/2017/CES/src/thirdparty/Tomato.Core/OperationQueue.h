@@ -54,6 +54,7 @@ public:
 	{
 		if (!invoker) ThrowIfFailed(E_NOT_VALID_STATE);
 		operations.push(std::forward<T>(operation));
+		++_remainingOperationsCount;
 		if (_enabled.load(std::memory_order_relaxed))
 			ActiveInvoker();
 	}
@@ -66,6 +67,11 @@ public:
 		else
 			InactiveInvoker();
 	}
+
+	size_t GetRemainingOperationsCount() const noexcept
+	{
+		return _remainingOperationsCount.load(std::memory_order_relaxed);
+	}
 private:
 	void OnProcessOperation()
 	{
@@ -73,7 +79,10 @@ private:
 		{
 			TOperation operation;
 			while (_enabled.load(std::memory_order_relaxed) && operations.try_pop(operation))
+			{
 				dispatcher(operation);
+				--_remainingOperationsCount;
+			}
 			invokerActive.store(false, std::memory_order_release);
 		}
 		catch (...)
@@ -100,6 +109,7 @@ protected:
 	concurrency::concurrent_queue<TOperation> operations;
 	std::atomic<bool> invokerActive = false;
 	std::atomic<bool> _enabled = true;
+	std::atomic<size_t> _remainingOperationsCount;
 };
 
 template<class TOperation>
@@ -142,6 +152,7 @@ public:
 		{
 			std::lock_guard<decltype(waitableOperationsMutex)> locker(waitableOperationsMutex);
 			waitableOperations.emplace_back(std::forward<T>(operation), event.Get());
+			++_remainingOperationsCount;
 		}
 		ActiveInvoker();
 	}
@@ -154,7 +165,10 @@ private:
 			{
 				TOperation operation;
 				if (operations.try_pop(operation))
+				{
 					dispatcher(operation);
+					--_remainingOperationsCount;
+				}
 
 				bool execute = false;
 				{
@@ -172,7 +186,10 @@ private:
 					}
 				}
 				if (execute)
+				{
 					dispatcher(operation);
+					--_remainingOperationsCount;
+				}
 			}
 
 			invokerActive.store(false, std::memory_order_release);

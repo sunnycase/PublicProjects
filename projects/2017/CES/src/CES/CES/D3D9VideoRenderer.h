@@ -4,10 +4,12 @@
 #include <evr.h>
 #include <d3d9.h>
 #include <evr9.h>
+#include "SamplePool.h"
+#include "Scheduler.h"
 
 namespace CES
 {
-	class D3D9VideoRenderer
+	class D3D9VideoRenderer : public WRL::RuntimeClass<WRL::RuntimeClassFlags<WRL::ClassicCom>, ISamplePresenter>
 	{
 	public:
 		enum class DeviceState
@@ -32,6 +34,9 @@ namespace CES
 
 		STDMETHODIMP GetService(REFGUID guidService, REFIID riid, LPVOID * ppvObject);
 		std::pair<HRESULT, DeviceState> GetDeviceState();
+
+		void CreateVideoSamples(IMFMediaType* mediaType, SamplePool& samplePool);
+		virtual void PresentSample(IMFSample* sample, MFTIME hnsTarget, MFTIME hnsTimeDelta, size_t remainingInQueue, MFTIME hnsFrameDurationDiv4) override;
 	private:
 		void CreateDeviceIndependentResources();
 		void CreateDeviceDependentResources();
@@ -48,8 +53,8 @@ namespace CES
 		WRL::ComPtr<IDirectXVideoProcessor> _dxVideoProcessor;
 		DXVA2_VideoProcessorCaps _videoProcessorCaps;
 		D3DFORMAT _videoSubFormat;
-
 		DXVA2_VideoDesc _videoDesc;
+		std::vector<WRL::ComPtr<IDirect3DSurface9>> _mixerSurfaces;
 
 		WRL::Wrappers::CriticalSection _stateLock;
 	};
