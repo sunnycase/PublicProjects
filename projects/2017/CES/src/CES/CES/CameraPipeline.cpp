@@ -2,7 +2,6 @@
 #include "CameraPipeline.h"
 #include <Tomato.Media/MFWorkerQueueProvider.h>
 #include <DirectXMath.h>
-#include "EVRPresenter.h"
 
 using namespace WRL;
 using namespace CES;
@@ -107,7 +106,6 @@ void CameraPipeline::ProcessSessionTopologyStatus(IMFMediaEvent * event)
 		ThrowIfFailed(MFGetService(_mediaSession.Get(), MR_VIDEO_RENDER_SERVICE, IID_PPV_ARGS(&_videoDispCtrl)));
 		ThrowIfFailed(MFGetService(_mediaSession.Get(), MR_VIDEO_MIXER_SERVICE, IID_PPV_ARGS(&_videoProcessor)));
 
-
 		DeviceReady.Publish();
 	}
 	else if(status == MF_TOPOSTATUS_STARTED_SOURCE)
@@ -147,7 +145,7 @@ void CameraPipeline::Start()
 
 #define DIB_WIDTHBYTES(bits) ((((bits) + 31)>>5)<<2)
 
-WRL::ComPtr<IWICBitmap> CES::CameraPipeline::TakePicture()
+void CES::CameraPipeline::TakePicture(CBitmap& bitmap)
 {
 	auto dispCtrl = _videoDispCtrl;
 	ThrowIfNot(dispCtrl, L"É¨ÃèÎ´¿ªÊ¼¡£");
@@ -159,11 +157,7 @@ WRL::ComPtr<IWICBitmap> CES::CameraPipeline::TakePicture()
 	LONGLONG timestamp;
 	ThrowIfFailed(dispCtrl->GetCurrentImage(&biHeader, &bitmapData._Myptr(), &dataSize, &timestamp));
 
-	auto stride = dataSize / biHeader.biHeight;
-	ComPtr<IWICBitmap> bitmap;
-	ThrowIfFailed(_wicFactory->CreateBitmapFromMemory(biHeader.biWidth, biHeader.biWidth, 
-		GUID_WICPixelFormat32bppBGR, stride, dataSize, bitmapData.get(), &bitmap));
-	return bitmap;
+	bitmap.CreateBitmap(biHeader.biWidth, biHeader.biHeight, biHeader.biPlanes, biHeader.biBitCount, bitmapData.get());
 }
 
 void CameraPipeline::CreateDeviceDependentResources()
@@ -186,7 +180,7 @@ void CameraPipeline::CreateDeviceDependentResources()
 
 void CameraPipeline::CreateDeviceIndependentResources()
 {
-	ThrowIfFailed(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC, IID_PPV_ARGS(&_wicFactory)));
+
 }
 
 void CameraPipeline::CreateSession()

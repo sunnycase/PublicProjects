@@ -34,3 +34,4 @@
 #include <Mferror.h>
 #include <afxwin.h>
 #include <afxcontrolbars.h>
+#include <afxdisp.h>

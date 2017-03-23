@@ -3,6 +3,7 @@
 #include "stdafx.h"
 #include "CES.h"
 #include "Cathelp.h"
+#include "CGdImageBox.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -33,6 +34,7 @@ BOOL CCESApp::InitInstance()
 	if (bInit)
 	{
 		// TODO:  在此添加您自己的模块初始化代码。
+		AfxEnableControlContainer();
 	}
 
 	return bInit;

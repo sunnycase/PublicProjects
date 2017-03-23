@@ -39,15 +39,6 @@
     <ClCompile Include="MFWorkerQueueProvider.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="EVRPresenter.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="D3D9VideoRenderer.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
-    <ClCompile Include="Scheduler.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="FreeList.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -57,7 +48,7 @@
     <ClCompile Include="ImageBox.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-	<ClCompile Include="SamplePool.cpp">
+    <ClCompile Include="CGdImageBox.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
@@ -86,16 +77,16 @@
     <ClInclude Include="CameraPipeline.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="EVRPresenter.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="D3D9VideoRenderer.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="Scheduler.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="ResourceContainer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="CGdImageBox.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="VideoBox.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ImageBox.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

@@ -108,7 +108,7 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;Evr.lib;Dxva2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -137,7 +137,7 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;Dxva2.lib;Evr.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -170,7 +170,7 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;Dxva2.lib;Evr.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -203,7 +203,7 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;Dxva2.lib;Evr.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -227,13 +227,10 @@
     <ClCompile Include="CES.cpp" />
     <ClCompile Include="CESCtrl.cpp" />
     <ClCompile Include="CESPropPage.cpp" />
-    <ClCompile Include="D3D9VideoRenderer.cpp" />
-    <ClCompile Include="EVRPresenter.cpp" />
+    <ClCompile Include="CGdImageBox.cpp" />
     <ClCompile Include="FreeList.cpp" />
     <ClCompile Include="ImageBox.cpp" />
     <ClCompile Include="MFWorkerQueueProvider.cpp" />
-    <ClCompile Include="SamplePool.cpp" />
-    <ClCompile Include="Scheduler.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -248,13 +245,10 @@
     <ClInclude Include="CES.h" />
     <ClInclude Include="CESCtrl.h" />
     <ClInclude Include="CESPropPage.h" />
-    <ClInclude Include="D3D9VideoRenderer.h" />
-    <ClInclude Include="EVRPresenter.h" />
+    <ClInclude Include="CGdImageBox.h" />
     <ClInclude Include="ImageBox.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="ResourceContainer.h" />
-    <ClInclude Include="SamplePool.h" />
-    <ClInclude Include="Scheduler.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="VideoBox.h" />
@@ -275,4 +269,9 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <ProjectExtensions>
+    <VisualStudio>
+      <UserProperties _x007B_7FD025C0-A085-44EA-B411-40000E237918_x007D_="CGdImageBox" />
+    </VisualStudio>
+  </ProjectExtensions>
 </Project>

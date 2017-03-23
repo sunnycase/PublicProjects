@@ -216,8 +216,9 @@ void CCESCtrl::TakePicture()
 	if (!_cameraPipeline)
 		ThrowIfFailed(E_NOT_VALID_STATE);
 
-	auto bitmap = _cameraPipeline->TakePicture();
-	_imageWnd.SetPicture(bitmap.Get());
+	CBitmap bitmap;
+	_cameraPipeline->TakePicture(bitmap);
+	_imageWnd.SetPicture(bitmap);
 	
 	SetViewState(ViewState::Image);
 }
