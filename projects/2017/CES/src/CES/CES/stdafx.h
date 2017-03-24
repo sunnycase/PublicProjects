@@ -35,3 +35,4 @@
 #include <afxwin.h>
 #include <afxcontrolbars.h>
 #include <afxdisp.h>
+#include <afxdisp.h>

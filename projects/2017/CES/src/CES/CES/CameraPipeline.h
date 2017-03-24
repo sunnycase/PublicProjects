@@ -104,6 +104,7 @@ namespace CES
 		void OpenCamera(CameraSource source, HWND videohWnd);
 		void Start();
 		void TakePicture(CBitmap& bitmap);
+		void OnResize(HWND videohWnd);
 
 		Event<void()> DeviceReady;
 	private:

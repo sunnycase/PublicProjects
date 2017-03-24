@@ -160,6 +160,17 @@ void CES::CameraPipeline::TakePicture(CBitmap& bitmap)
 	bitmap.CreateBitmap(biHeader.biWidth, biHeader.biHeight, biHeader.biPlanes, biHeader.biBitCount, bitmapData.get());
 }
 
+void CES::CameraPipeline::OnResize(HWND videohWnd)
+{
+	if (auto videoDispCtrl = _videoDispCtrl)
+	{
+		RECT rect;
+		ThrowWin32IfNot(GetClientRect(videohWnd, &rect));
+		static const MFVideoNormalizedRect nrect{ 0, 0, 1, 1 };
+		ThrowIfFailed(videoDispCtrl->SetVideoPosition(&nrect, &rect));
+	}
+}
+
 void CameraPipeline::CreateDeviceDependentResources()
 {
 	ComPtr<IMFAttributes> attributes;
@@ -167,13 +178,13 @@ void CameraPipeline::CreateDeviceDependentResources()
 
 	ThrowIfFailed(attributes->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID));
 
-	unique_cotaskmem<ComPtr<IMFActivate>> activators;
+	unique_cotaskmem_arr<ComPtr<IMFActivate>> activators;
 	UINT32 count;
 	ThrowIfFailed(MFEnumDeviceSources(attributes.Get(), reinterpret_cast<IMFActivate***>(&activators._Myptr()), &count));
 	if (count > 0)
-		ThrowIfFailed(activators.get()[0]->ActivateObject(IID_PPV_ARGS(&_scannerSource)));
+		ThrowIfFailed(activators[0]->ActivateObject(IID_PPV_ARGS(&_scannerSource)));
 	if (count > 1)
-		ThrowIfFailed(activators.get()[1]->ActivateObject(IID_PPV_ARGS(&_cameraSource)));
+		ThrowIfFailed(activators[1]->ActivateObject(IID_PPV_ARGS(&_cameraSource)));
 }
 
 #include <wmcodecdsp.h>

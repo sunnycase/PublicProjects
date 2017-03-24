@@ -227,7 +227,6 @@
     <ClCompile Include="CES.cpp" />
     <ClCompile Include="CESCtrl.cpp" />
     <ClCompile Include="CESPropPage.cpp" />
-    <ClCompile Include="CGdImageBox.cpp" />
     <ClCompile Include="FreeList.cpp" />
     <ClCompile Include="ImageBox.cpp" />
     <ClCompile Include="MFWorkerQueueProvider.cpp" />
@@ -245,7 +244,6 @@
     <ClInclude Include="CES.h" />
     <ClInclude Include="CESCtrl.h" />
     <ClInclude Include="CESPropPage.h" />
-    <ClInclude Include="CGdImageBox.h" />
     <ClInclude Include="ImageBox.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="ResourceContainer.h" />
@@ -271,7 +269,7 @@
   </ImportGroup>
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties _x007B_7FD025C0-A085-44EA-B411-40000E237918_x007D_="CGdImageBox" />
+      <UserProperties _x007B_6D940280-9F11-11CE-83FD-02608C3EC08A_x007D_="CDImgEdit" _x007B_7FD025C0-A085-44EA-B411-40000E237918_x007D_="CGdImageBox" />
     </VisualStudio>
   </ProjectExtensions>
 </Project>

@@ -1,0 +1,152 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+
+    <link href="/lib/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="/lib/bootstrap-treeview/dist/bootstrap-treeview.min.css" rel="stylesheet" />
+    <link href="/css/site.css" rel="stylesheet" />
+
+    <style>
+        #ces{
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid" style="height: 100%;">
+        <div class="row">
+            <div class="col-md-3">
+                <h3 class="text-center" style="margin-top: .1em;">速飞影像采集平台 v2.0</h3>
+            </div>
+            <div class="col-md-9">
+                <button class="btn btn-default" onclick="onScanningOrTakePhoto(this)">开始扫描</button>
+                <button class="btn btn-default" onclick="onRotateLeft()">左旋转</button>
+                <button class="btn btn-default" onclick="onRotateRight()">右旋转</button>
+                <button class="btn btn-default" onclick="onZoomIn()">放大</button>
+                <button class="btn btn-default" onclick="onZoomOut()">缩小</button>
+            </div>
+        </div>
+        <div class="row" style="height: calc(100% - 40px);">
+            <div class="col-md-3">
+                <div id="tree"></div>
+            </div>
+            <object id="ces" class="col-md-9" classid="clsid:360FB522-FE3E-42CC-B56D-CA767F419987"></object>
+        </div>
+    </div>
+
+    <script src="/lib/jquery/dist/jquery.min.js"></script>
+    <script src="/lib/bootstrap/dist/js/bootstrap.min.js"></script>
+    <script src="/lib/bootstrap-treeview/dist/bootstrap-treeview.min.js"></script>
+
+    <script>
+        var busi = 01
+        var seq = 11002010920
+        var wfId = 330321
+        var type = 1
+        var ip = '192.168.207.6'
+        var zip = true
+        var width = 800
+        var hight = 600
+        var categories = [{'一级档案': ['身份证', '人像', '申请书'] },{ '二级档案': ['放款文件', '其它申请资料'] }]
+        var destUrl = 'TEST.FOO'
+        var enabledUp = true
+    </script>
+
+    <script>
+        function buildTree() {
+            return [
+                {
+                    text: "Parent 1",
+                    nodes: [
+                        {
+                            text: "Child 1",
+                            nodes: [
+                                {
+                                    text: "Grandchild 1"
+                                },
+                                {
+                                    text: "Grandchild 2"
+                                }
+                            ]
+                        },
+                        {
+                            text: "Child 2"
+                        }
+                    ]
+                },
+                {
+                    text: "Parent 2"
+                },
+                {
+                    text: "Parent 3"
+                },
+                {
+                    text: "Parent 4"
+                },
+                {
+                    text: "Parent 5"
+                }
+            ];
+        }
+
+        var isScanning = false;
+        function onScanningOrTakePhoto(sender) {
+            var ces = document.getElementById('ces');
+            if (isScanning) {
+                $(sender).text('开始扫描');
+                ces.TakePicture();
+                isScanning = false;
+            }
+            else {
+                $(sender).text(' 拍  照 ');
+                ces.StartScanning();
+                isScanning = true;
+            }
+        }
+
+        function fixRotation(rotation) {
+            if (rotation < 0)
+                return fixRotation(rotation + 360);
+            else if (rotation >= 360)
+                return fixRotation(rotation - 360);
+            return rotation;
+        }
+
+        var rotation = 0;
+        function onRotateLeft() {
+            rotation = fixRotation(rotation - 90);
+            document.getElementById('ces').Rotation = rotation;
+        }
+
+        function onRotateRight() {
+            rotation = fixRotation(rotation + 90);
+            document.getElementById('ces').Rotation = rotation;
+        }
+
+        function fixZoom(zoom) {
+            if (zoom <= 0.2)
+                return 0.4;
+            else if (zoom >= 3)
+                return 3;
+            return zoom;
+        }
+
+        var zoom = 1.0;
+        function onZoomIn() {
+            zoom = fixZoom(zoom * 1.2);
+            document.getElementById('ces').Zoom = zoom;
+        }
+
+        function onZoomOut() {
+            zoom = fixZoom(zoom / 1.2);
+            document.getElementById('ces').Zoom = zoom;
+        }
+
+        $(document).ready(function () {
+            $('#tree').treeview({ data: buildTree() });
+        });
+    </script>
+</body>
+</html>

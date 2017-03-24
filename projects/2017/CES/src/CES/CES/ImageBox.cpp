@@ -4,12 +4,13 @@
 #include "stdafx.h"
 #include "CES.h"
 #include "ImageBox.h"
+#include <algorithm>
 
 using namespace WRL;
 
 // CImageBox
 
-IMPLEMENT_DYNAMIC(CImageBox, CStatic)
+IMPLEMENT_DYNAMIC(CImageBox, CScrollView)
 
 CImageBox::CImageBox()
 {
@@ -21,9 +22,9 @@ CImageBox::~CImageBox()
 }
 
 
-BEGIN_MESSAGE_MAP(CImageBox, CStatic)
+BEGIN_MESSAGE_MAP(CImageBox, CScrollView)
 	ON_WM_CREATE()
-	ON_WM_PAINT()
+	ON_WM_SIZE()
 END_MESSAGE_MAP()
 
 
@@ -115,14 +116,61 @@ void CImageBox::SetPicture(HBITMAP bitmap)
 		ThrowIfFailed(_wicFactory->CreateBitmapFlipRotator(&flipRotator));
 		ThrowIfFailed(flipRotator->Initialize(wicBitmap.Get(), WICBitmapTransformFlipVertical));
 
-		_wicBitmap = flipRotator;
-
-		ThrowIfFailed(_gdImageBox.DisplayFromHBitmap((long)CreateHBITMAP(flipRotator.Get())));
+		_origWicBitmap = flipRotator;
 	}
 	else
 	{
-		_wicBitmap.Reset();
-		_bitmap.Reset();
+		_origWicBitmap.Reset();
+	}
+	UpdateBitmap();
+}
+
+void CImageBox::SetZoom(float factor)
+{
+	_zoomFactor = factor;
+	UpdateScrollSizes();
+	Invalidate();
+}
+
+void CImageBox::Rotate(uint32_t degree)
+{
+	switch (degree)
+	{
+	case 0:
+		_rotation = WICBitmapTransformRotate0;
+		break;
+	case 90:
+		_rotation = WICBitmapTransformRotate90;
+		break;
+	case 180:
+		_rotation = WICBitmapTransformRotate180;
+		break;
+	case 270:
+		_rotation = WICBitmapTransformRotate270;
+		break;
+	default:
+		ThrowAlways(L"Invalid rotation degree.");
+		break;
+	}
+	UpdateBitmap();
+}
+
+#undef min
+
+void CImageBox::AutoFitSize()
+{
+	if (_wicBitmap)
+	{
+		RECT rect;
+		GetClientRect(&rect);
+
+		UINT width, height;
+		ThrowIfFailed(_wicBitmap->GetSize(&width, &height));
+		if (width && height)
+		{
+			_zoomFactor = std::min(float(rect.right - rect.left) / width, float(rect.bottom - rect.top) / height);
+			UpdateScrollSizes();
+		}
 	}
 	Invalidate();
 }
@@ -142,35 +190,97 @@ void CImageBox::CreateDeviceDependentResources()
 	ThrowIfFailed(_renderTarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Yellow), &_brush));
 }
 
+void CImageBox::UpdateScrollSizes()
+{
+	if (_wicBitmap)
+	{
+		UINT width, height;
+		ThrowIfFailed(_wicBitmap->GetSize(&width, &height));
+
+		width *= _zoomFactor;
+		height *= _zoomFactor;
+		SetScrollSizes(MM_TEXT, CSize(width, height));
+	}
+	else
+		SetScrollSizes(MM_TEXT, CSize(0, 0));
+}
+
+void CImageBox::UpdateBitmap()
+{
+	if (_origWicBitmap)
+	{
+		ComPtr<IWICBitmapFlipRotator> flipRotator;
+		ThrowIfFailed(_wicFactory->CreateBitmapFlipRotator(&flipRotator));
+		ThrowIfFailed(flipRotator->Initialize(_origWicBitmap.Get(), _rotation));
+
+		ComPtr<ID2D1Bitmap> d2dBitmap;
+		ThrowIfFailed(_renderTarget->CreateBitmapFromWicBitmap(flipRotator.Get(), &d2dBitmap));
+		_wicBitmap = flipRotator;
+		_bitmap = d2dBitmap;
+	}
+	else
+	{
+		_wicBitmap.Reset();
+		_bitmap.Reset();
+	}
+	UpdateScrollSizes();
+	Invalidate();
+}
+
 int CImageBox::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
-	if (CStatic::OnCreate(lpCreateStruct) == -1)
+	if (CScrollView::OnCreate(lpCreateStruct) == -1)
 		return -1;
 
 	CreateDeviceDependentResources();
 
-	RECT rect;
-	GetClientRect(&rect);
-	ThrowIfNot(_gdImageBox.Create(nullptr, WS_CHILD | WS_VISIBLE, rect, this), L"cannot init window.");
-	_gdImageBox.put_LicenseKEY(L"1519611432053604640600840");
+	SetScrollSizes(MM_TEXT, CSize(0, 0));
 	return 0;
 }
 
 
-void CImageBox::OnPaint()
+void CImageBox::OnDraw(CDC* /*pDC*/)
 {
-	CPaintDC dc(this); // device context for painting
+	RECT rect;
+	GetClientRect(&rect);
+	_renderTarget->BeginDraw();
+	if (_bitmap)
+	{
+		auto position = GetScrollPosition();
 
-	//RECT rect;
-	//GetClientRect(&rect);
-	//_renderTarget->BeginDraw();
-	//if (_bitmap)
-	//{
-	//	_renderTarget->DrawBitmap(_bitmap.Get(), D2D1::RectF(
-	//		rect.left,
-	//		rect.top,
-	//		rect.right,
-	//		rect.bottom));
-	//}
-	//auto hr = _renderTarget->EndDraw();
+		_renderTarget->DrawBitmap(_bitmap.Get(), D2D1::RectF(
+			rect.left,
+			rect.top,
+			rect.right,
+			rect.bottom), 1.f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,
+			D2D1::RectF(
+				position.x / _zoomFactor,
+				position.y / _zoomFactor,
+				(position.x + rect.right - rect.left) / _zoomFactor,
+				(position.y + rect.bottom - rect.top) / _zoomFactor));
+	}
+	auto hr = _renderTarget->EndDraw();
+}
+
+
+void CImageBox::OnSize(UINT nType, int cx, int cy)
+{
+	CScrollView::OnSize(nType, cx, cy);
+
+	if (nType == SIZE_MINIMIZED)
+	{
+		//需要判断一下，是最小化则退出。
+		//如果是最小化，恢复的时候会BUG，因为整数除以0
+		return;
+	}
+
+	RECT rect;
+	GetClientRect(&rect);
+	ThrowIfFailed(_renderTarget->Resize(D2D1::SizeU(rect.right - rect.left, rect.bottom - rect.top)));
+}
+
+
+void CImageBox::PostNcDestroy()
+{
+
 }

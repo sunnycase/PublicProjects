@@ -18,6 +18,7 @@ BEGIN_MESSAGE_MAP(CCESCtrl, COleControl)
 	ON_OLEVERB(AFX_IDS_VERB_EDIT, OnEdit)
 	ON_OLEVERB(AFX_IDS_VERB_PROPERTIES, OnProperties)
 	ON_WM_CREATE()
+	ON_WM_SIZE()
 END_MESSAGE_MAP()
 
 // 调度映射
@@ -26,6 +27,8 @@ BEGIN_DISPATCH_MAP(CCESCtrl, COleControl)
 	DISP_FUNCTION_ID(CCESCtrl, "AboutBox", DISPID_ABOUTBOX, AboutBox, VT_EMPTY, VTS_NONE)
 	DISP_FUNCTION_ID(CCESCtrl, "StartScanning", dispidStartScanning, StartScanning, VT_EMPTY, VTS_NONE)
 	DISP_FUNCTION_ID(CCESCtrl, "TakePicture", dispidTakePicture, TakePicture, VT_EMPTY, VTS_NONE)
+	DISP_PROPERTY_EX_ID(CCESCtrl, "Rotation", dispidRotation, GetRotation, SetRotation, VT_UI4)
+	DISP_PROPERTY_EX_ID(CCESCtrl, "Zoom", dispidZoom, GetZoom, SetZoom, VT_R4)
 END_DISPATCH_MAP()
 
 // 事件映射
@@ -98,7 +101,7 @@ BOOL CCESCtrl::CCESCtrlFactory::UpdateRegistry(BOOL bRegister)
 CCESCtrl::CCESCtrl()
 {
 	InitializeIIDs(&IID_DCES, &IID_DCESEvents);
-	//__debugbreak();
+	__debugbreak();
 	// TODO:  在此初始化控件的实例数据。
 }
 
@@ -188,7 +191,7 @@ int CCESCtrl::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	RECT rect;
 	GetClientRect(&rect);
 	ThrowIfNot(_videoBox.Create(nullptr, WS_CHILD | WS_VISIBLE, rect, this), L"cannot init window.");
-	ThrowIfNot(_imageWnd.Create(nullptr, WS_CHILD, rect, this), L"cannot init window.");
+	ThrowIfNot(_imageWnd.Create(nullptr, nullptr, WS_CHILD, rect, this, 65535), L"cannot init window.");
 	return 0;
 }
 
@@ -208,6 +211,25 @@ void CCESCtrl::StartScanning()
 	SetViewState(ViewState::Video);
 }
 
+void CCESCtrl::OnSize(UINT nType, int cx, int cy)
+{
+	COleControl::OnSize(nType, cx, cy);
+
+	if (nType == SIZE_MINIMIZED)
+	{
+		//需要判断一下，是最小化则退出。
+		//如果是最小化，恢复的时候会BUG，因为整数除以0
+		return;
+	}
+
+	RECT rect;
+	GetClientRect(&rect);
+	_videoBox.MoveWindow(&rect);
+	if (_cameraPipeline)
+		_cameraPipeline->OnResize(_videoBox.GetSafeHwnd());
+	_imageWnd.MoveWindow(&rect);
+}
+
 
 void CCESCtrl::TakePicture()
 {
@@ -221,4 +243,44 @@ void CCESCtrl::TakePicture()
 	_imageWnd.SetPicture(bitmap);
 	
 	SetViewState(ViewState::Image);
+}
+
+
+ULONG CCESCtrl::GetRotation()
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	// TODO: 在此添加调度处理程序代码
+
+	return 0;
+}
+
+
+void CCESCtrl::SetRotation(ULONG newVal)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	_imageWnd.Rotate(newVal);
+
+	SetModifiedFlag();
+}
+
+
+FLOAT CCESCtrl::GetZoom()
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	// TODO: 在此添加调度处理程序代码
+
+	return 0;
+}
+
+
+void CCESCtrl::SetZoom(FLOAT newVal)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	_imageWnd.SetZoom(newVal);
+
+	SetModifiedFlag();
 }

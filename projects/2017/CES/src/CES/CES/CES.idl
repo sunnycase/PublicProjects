@@ -20,7 +20,9 @@ library CESLib
 	dispinterface _DCES
 	{
 		properties:
-		methods:
+			[id(3)] ULONG Rotation;
+			[id(4)] FLOAT Zoom;
+	methods:
 
 			[id(DISPID_ABOUTBOX)] void AboutBox();
 			[id(1)] void StartScanning();
