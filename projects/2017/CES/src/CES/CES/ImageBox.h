@@ -2,6 +2,7 @@
 #include <Tomato.Core/Tomato.Core.h>
 #include <d2d1.h>
 #include <wincodec.h>
+#include <string_view>
 
 // CImageBox
 
@@ -17,6 +18,7 @@ public:
 	void SetZoom(float factor);
 	void Rotate(uint32_t degree);
 	void AutoFitSize();
+	void SaveAs(std::wstring_view fileName);
 protected:
 	DECLARE_MESSAGE_MAP()
 private:

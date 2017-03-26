@@ -31,80 +31,6 @@ END_MESSAGE_MAP()
 
 // CImageBox 消息处理程序
 
-namespace
-{
-	HBITMAP CreateHBITMAP(IWICBitmapSource * ipBitmap)
-	{
-		// initialize return value
-		HBITMAP hbmp = NULL;
-
-		// get image attributes and check for valid image
-
-		UINT width = 0;
-
-		UINT height = 0;
-
-		if (FAILED(ipBitmap->GetSize(&width, &height)) || width == 0 || height == 0)
-
-			goto Return;
-
-		// prepare structure giving bitmap information (negative height indicates a top-down DIB)
-
-		BITMAPINFO bminfo;
-
-		ZeroMemory(&bminfo, sizeof(bminfo));
-
-		bminfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-
-		bminfo.bmiHeader.biWidth = width;
-
-		bminfo.bmiHeader.biHeight = -((LONG)height);
-
-		bminfo.bmiHeader.biPlanes = 1;
-
-		bminfo.bmiHeader.biBitCount = 32;
-
-		bminfo.bmiHeader.biCompression = BI_RGB;
-
-		// create a DIB section that can hold the image
-
-		void * pvImageBits = NULL;
-
-		HDC hdcScreen = GetDC(NULL);
-
-		hbmp = CreateDIBSection(hdcScreen, &bminfo, DIB_RGB_COLORS, &pvImageBits, NULL, 0);
-
-		ReleaseDC(NULL, hdcScreen);
-
-		if (hbmp == NULL)
-
-			goto Return;
-
-		// extract the image into the HBITMAP
-
-		const UINT cbStride = width * 4;
-
-		const UINT cbImage = cbStride * height;
-
-		if (FAILED(ipBitmap->CopyPixels(NULL, cbStride, cbImage, static_cast<BYTE *>(pvImageBits))))
-
-		{
-
-			// couldn't extract image; delete HBITMAP
-
-			DeleteObject(hbmp);
-
-			hbmp = NULL;
-
-		}
-
-	Return:
-
-		return hbmp;
-
-	}
-}
-
 void CImageBox::SetPicture(HBITMAP bitmap)
 {
 	if (bitmap)
@@ -173,6 +99,32 @@ void CImageBox::AutoFitSize()
 		}
 	}
 	Invalidate();
+}
+
+void CImageBox::SaveAs(std::wstring_view fileName)
+{
+	ComPtr<IWICStream> stream;
+	ThrowIfFailed(_wicFactory->CreateStream(&stream));
+	ThrowIfFailed(stream->InitializeFromFilename(fileName.data(), GENERIC_WRITE));
+	ComPtr<IWICBitmapEncoder> encoder;
+	ThrowIfFailed(_wicFactory->CreateEncoder(GUID_ContainerFormatJpeg, nullptr, &encoder));
+	ThrowIfFailed(encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache));
+
+	ComPtr<IWICBitmapFrameEncode> frameEncode;
+	ComPtr<IPropertyBag2> encodeOptions;
+	ThrowIfFailed(encoder->CreateNewFrame(&frameEncode, &encodeOptions));
+	ThrowIfFailed(frameEncode->Initialize(encodeOptions.Get()));
+	auto pixelFormat = GUID_WICPixelFormat24bppBGR;
+	ThrowIfFailed(frameEncode->SetPixelFormat(&pixelFormat));
+	if (auto source = _origWicBitmap)
+	{
+		UINT width, height;
+		ThrowIfFailed(source->GetSize(&width, &height));
+		ThrowIfFailed(frameEncode->SetSize(width, height));
+		ThrowIfFailed(frameEncode->WriteSource(source.Get(), nullptr));
+		ThrowIfFailed(frameEncode->Commit());
+	}
+	ThrowIfFailed(encoder->Commit());
 }
 
 void CImageBox::CreateDeviceDependentResources()

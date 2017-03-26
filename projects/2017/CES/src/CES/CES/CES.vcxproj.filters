@@ -48,6 +48,9 @@
     <ClCompile Include="ImageBox.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="ImageStorage.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -81,6 +84,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="ImageBox.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ImageStorage.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

@@ -2,6 +2,7 @@
 #include "CameraPipeline.h"
 #include "VideoBox.h"
 #include "ImageBox.h"
+#include "ImageStorage.h"
 
 // CESCtrl.h : CCESCtrl ActiveX 控件类的声明。
 
@@ -64,6 +65,7 @@ private:
 	WRL::ComPtr<CES::CameraPipeline> _cameraPipeline;
 	CVideoBox _videoBox;
 	CImageBox _imageWnd;
+	CES::ImageStorage _imageStorage;
 public:
 	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
 	afx_msg void OnSize(UINT nType, int cx, int cy);

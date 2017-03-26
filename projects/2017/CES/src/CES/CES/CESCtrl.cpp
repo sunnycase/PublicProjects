@@ -101,7 +101,7 @@ BOOL CCESCtrl::CCESCtrlFactory::UpdateRegistry(BOOL bRegister)
 CCESCtrl::CCESCtrl()
 {
 	InitializeIIDs(&IID_DCES, &IID_DCESEvents);
-	__debugbreak();
+	//__debugbreak();
 	// TODO:  在此初始化控件的实例数据。
 }
 
@@ -192,6 +192,7 @@ int CCESCtrl::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	GetClientRect(&rect);
 	ThrowIfNot(_videoBox.Create(nullptr, WS_CHILD | WS_VISIBLE, rect, this), L"cannot init window.");
 	ThrowIfNot(_imageWnd.Create(nullptr, nullptr, WS_CHILD, rect, this, 65535), L"cannot init window.");
+	_imageStorage.Refresh();
 	return 0;
 }
 
