@@ -12,12 +12,14 @@ namespace CES
 	public:
 		ImageStorage();
 
-		void SetSessionId(std::wstring_view sessionId);
+		void Initialize(std::wstring_view sessionId, std::wstring_view categories);
 		void Refresh();
 	private:
 		void EnsureRootDirectoryExists();
+		void LoadStorageRecursive(const std::experimental::filesystem::directory_entry& directory, const rapidjson::GenericValue<rapidjson::UTF16<>>& cntLevelCategories, rapidjson::GenericValue<rapidjson::UTF16<>>& destValue, rapidjson::MemoryPoolAllocator<>& allocator);
 	private:
 		std::experimental::filesystem::path _rootDir;
+		rapidjson::GenericDocument<rapidjson::UTF16<>> _categoriesJson;
 		rapidjson::GenericDocument<rapidjson::UTF16<>> _storageJson;
 		std::wstring _sessionId;
 	};
