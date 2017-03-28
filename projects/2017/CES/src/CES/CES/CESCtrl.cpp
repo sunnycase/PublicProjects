@@ -5,6 +5,8 @@
 #include "CESCtrl.h"
 #include "CESPropPage.h"
 #include "afxdialogex.h"
+#include <atlsafe.h>
+#include <filesystem>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -26,9 +28,12 @@ END_MESSAGE_MAP()
 BEGIN_DISPATCH_MAP(CCESCtrl, COleControl)
 	DISP_FUNCTION_ID(CCESCtrl, "AboutBox", DISPID_ABOUTBOX, AboutBox, VT_EMPTY, VTS_NONE)
 	DISP_FUNCTION_ID(CCESCtrl, "StartScanning", dispidStartScanning, StartScanning, VT_EMPTY, VTS_NONE)
-	DISP_FUNCTION_ID(CCESCtrl, "TakePicture", dispidTakePicture, TakePicture, VT_EMPTY, VTS_NONE)
+	DISP_FUNCTION_ID(CCESCtrl, "TakePicture", dispidTakePicture, TakePicture, VT_BSTR, VTS_NONE)
 	DISP_PROPERTY_EX_ID(CCESCtrl, "Rotation", dispidRotation, GetRotation, SetRotation, VT_UI4)
 	DISP_PROPERTY_EX_ID(CCESCtrl, "Zoom", dispidZoom, GetZoom, SetZoom, VT_R4)
+	DISP_FUNCTION_ID(CCESCtrl, "InitializeBusiness", dispidInitializeBusiness, InitializeBusiness, VT_EMPTY, VTS_UI2 VTS_BSTR VTS_BSTR VTS_UI2 VTS_BOOL VTS_BSTR VTS_BSTR VTS_BSTR)
+	DISP_FUNCTION_ID(CCESCtrl, "GetImageStorageTree", dispidGetImageStorageTree, GetImageStorageTree, VT_BSTR, VTS_NONE)
+	DISP_FUNCTION_ID(CCESCtrl, "SetScanToPath", dispidSetScanToPath, SetScanToPath, VT_EMPTY, VTS_BSTR)
 END_DISPATCH_MAP()
 
 // ÊÂ¼þÓ³Éä
@@ -192,7 +197,6 @@ int CCESCtrl::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	GetClientRect(&rect);
 	ThrowIfNot(_videoBox.Create(nullptr, WS_CHILD | WS_VISIBLE, rect, this), L"cannot init window.");
 	ThrowIfNot(_imageWnd.Create(nullptr, nullptr, WS_CHILD, rect, this, 65535), L"cannot init window.");
-	_imageStorage.Refresh();
 	return 0;
 }
 
@@ -232,7 +236,7 @@ void CCESCtrl::OnSize(UINT nType, int cx, int cy)
 }
 
 
-void CCESCtrl::TakePicture()
+BSTR CCESCtrl::TakePicture()
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
@@ -242,8 +246,12 @@ void CCESCtrl::TakePicture()
 	CBitmap bitmap;
 	_cameraPipeline->TakePicture(bitmap);
 	_imageWnd.SetPicture(bitmap);
+
+	auto filePath = _imageStorage.GetNextAvailableFileName();
+	_imageWnd.SaveAs(filePath);
 	
 	SetViewState(ViewState::Image);
+	return _bstr_t(std::experimental::filesystem::path(filePath).filename().c_str()).Detach();
 }
 
 
@@ -284,4 +292,27 @@ void CCESCtrl::SetZoom(FLOAT newVal)
 	_imageWnd.SetZoom(newVal);
 
 	SetModifiedFlag();
+}
+
+
+void CCESCtrl::InitializeBusiness(USHORT busType, LPCTSTR seqId, LPCTSTR workflowId, USHORT storageType, VARIANT_BOOL useZip, LPCTSTR categories, LPCTSTR uploadIp, LPCTSTR uploadUri)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	_imageStorage.Initialize(storageType == 0 ? workflowId : seqId, categories);
+}
+
+
+BSTR CCESCtrl::GetImageStorageTree()
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+	auto str = _imageStorage.GetStorageJson();
+	return _bstr_t(str.c_str()).Detach();
+}
+
+void CCESCtrl::SetScanToPath(LPCTSTR path)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+	
+	_imageStorage.SetSelectedPath({ path, SysStringLen(const_cast<BSTR>(path)) });
 }

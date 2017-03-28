@@ -26,7 +26,10 @@ library CESLib
 
 			[id(DISPID_ABOUTBOX)] void AboutBox();
 			[id(1)] void StartScanning();
-			[id(2)] void TakePicture();
+			[id(2)] BSTR TakePicture();
+			[id(5)] void InitializeBusiness(USHORT busType, BSTR seqId, BSTR workflowId, USHORT storageType, VARIANT_BOOL useZip, BSTR categories, BSTR uploadIp, BSTR uploadUri);
+			[id(6)] BSTR GetImageStorageTree();
+			[id(7)] void SetScanToPath(BSTR path);
 	};
 
 	//  CCESCtrl 的事件调度接口

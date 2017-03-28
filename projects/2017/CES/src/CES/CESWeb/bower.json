@@ -6,6 +6,6 @@
     "jquery": "2.2.0",
     "jquery-validation": "1.14.0",
     "jquery-validation-unobtrusive": "3.2.6",
-    "bootstrap-treeview": "1.2.0"
+    "patternfly-bootstrap-treeview": "2.1.1"
   }
 }

@@ -47,6 +47,9 @@ protected:
 // 调度和事件 ID
 public:
 	enum {
+		dispidSetScanToPath = 7L,
+		dispidGetImageStorageTree = 6L,
+		dispidInitializeBusiness = 5L,
 		dispidZoom = 4,
 		dispidRotation = 3,
 		dispidTakePicture = 2L,
@@ -71,10 +74,13 @@ public:
 	afx_msg void OnSize(UINT nType, int cx, int cy);
 protected:
 	void StartScanning();
-	void TakePicture();
+	BSTR TakePicture();
 	ULONG GetRotation();
 	void SetRotation(ULONG newVal);
 	FLOAT GetZoom();
 	void SetZoom(FLOAT newVal);
+	void InitializeBusiness(USHORT busType, LPCTSTR seqId, LPCTSTR workflowId, USHORT storageType, VARIANT_BOOL useZip, LPCTSTR categories, LPCTSTR uploadIp, LPCTSTR uploadUri);
+	BSTR GetImageStorageTree();
+	void SetScanToPath(LPCTSTR path);
 };
 
