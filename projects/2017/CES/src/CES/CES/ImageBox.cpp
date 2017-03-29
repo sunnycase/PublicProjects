@@ -5,6 +5,7 @@
 #include "CES.h"
 #include "ImageBox.h"
 #include <algorithm>
+#include <unordered_set>
 
 using namespace WRL;
 
@@ -43,6 +44,55 @@ void CImageBox::SetPicture(HBITMAP bitmap)
 		ThrowIfFailed(flipRotator->Initialize(wicBitmap.Get(), WICBitmapTransformFlipVertical));
 
 		_origWicBitmap = flipRotator;
+	}
+	else
+	{
+		_origWicBitmap.Reset();
+	}
+	UpdateBitmap();
+}
+
+namespace std {
+	template<> struct hash<GUID>
+	{
+		size_t operator()(const GUID& guid) const noexcept {
+			const std::uint64_t* p = reinterpret_cast<const std::uint64_t*>(&guid);
+			std::hash<std::uint64_t> hash;
+			return hash(p[0]) ^ hash(p[1]);
+		}
+	};
+}
+
+namespace
+{
+	const std::unordered_set<GUID> _supportedWicFormats =
+	{
+		GUID_WICPixelFormat32bppPRGBA,
+		GUID_WICPixelFormat32bppBGR,
+		GUID_WICPixelFormat32bppPBGRA
+	};
+}
+
+void CImageBox::SetPicture(std::wstring_view fileName)
+{
+	if (!fileName.empty())
+	{
+		ComPtr<IWICBitmapDecoder> decoder;
+		ThrowIfFailed(_wicFactory->CreateDecoderFromFilename(fileName.data(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &decoder));
+		ComPtr<IWICBitmapFrameDecode> frame;
+		ThrowIfFailed(decoder->GetFrame(0, &frame));
+
+		WICPixelFormatGUID format;
+		ThrowIfFailed(frame->GetPixelFormat(&format));
+		if (_supportedWicFormats.find(format) != _supportedWicFormats.end())
+			_origWicBitmap = frame;
+		else
+		{
+			ComPtr<IWICFormatConverter> converter;
+			ThrowIfFailed(_wicFactory->CreateFormatConverter(&converter));
+			ThrowIfFailed(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.f, WICBitmapPaletteTypeMedianCut));
+			_origWicBitmap = converter;
+		}
 	}
 	else
 	{
@@ -101,30 +151,49 @@ void CImageBox::AutoFitSize()
 	Invalidate();
 }
 
+namespace
+{
+	void Save(IWICImagingFactory* wicFactory, IWICStream* destStream, IWICBitmapSource* source)
+	{
+		ComPtr<IWICBitmapEncoder> encoder;
+		ThrowIfFailed(wicFactory->CreateEncoder(GUID_ContainerFormatJpeg, nullptr, &encoder));
+		ThrowIfFailed(encoder->Initialize(destStream, WICBitmapEncoderNoCache));
+
+		ComPtr<IWICBitmapFrameEncode> frameEncode;
+		ComPtr<IPropertyBag2> encodeOptions;
+		ThrowIfFailed(encoder->CreateNewFrame(&frameEncode, &encodeOptions));
+		ThrowIfFailed(frameEncode->Initialize(encodeOptions.Get()));
+		auto pixelFormat = GUID_WICPixelFormat24bppBGR;
+		ThrowIfFailed(frameEncode->SetPixelFormat(&pixelFormat));
+		if (source)
+		{
+			UINT width, height;
+			ThrowIfFailed(source->GetSize(&width, &height));
+			ThrowIfFailed(frameEncode->SetSize(width, height));
+			ThrowIfFailed(frameEncode->WriteSource(source, nullptr));
+			ThrowIfFailed(frameEncode->Commit());
+		}
+		ThrowIfFailed(encoder->Commit());
+	}
+}
+
 void CImageBox::SaveAs(std::wstring_view fileName)
 {
 	ComPtr<IWICStream> stream;
 	ThrowIfFailed(_wicFactory->CreateStream(&stream));
 	ThrowIfFailed(stream->InitializeFromFilename(fileName.data(), GENERIC_WRITE));
-	ComPtr<IWICBitmapEncoder> encoder;
-	ThrowIfFailed(_wicFactory->CreateEncoder(GUID_ContainerFormatJpeg, nullptr, &encoder));
-	ThrowIfFailed(encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache));
+	Save(_wicFactory.Get(), stream.Get(), _origWicBitmap.Get());
+}
 
-	ComPtr<IWICBitmapFrameEncode> frameEncode;
-	ComPtr<IPropertyBag2> encodeOptions;
-	ThrowIfFailed(encoder->CreateNewFrame(&frameEncode, &encodeOptions));
-	ThrowIfFailed(frameEncode->Initialize(encodeOptions.Get()));
-	auto pixelFormat = GUID_WICPixelFormat24bppBGR;
-	ThrowIfFailed(frameEncode->SetPixelFormat(&pixelFormat));
-	if (auto source = _origWicBitmap)
-	{
-		UINT width, height;
-		ThrowIfFailed(source->GetSize(&width, &height));
-		ThrowIfFailed(frameEncode->SetSize(width, height));
-		ThrowIfFailed(frameEncode->WriteSource(source.Get(), nullptr));
-		ThrowIfFailed(frameEncode->Commit());
-	}
-	ThrowIfFailed(encoder->Commit());
+WRL::ComPtr<IStream> CImageBox::SaveToStream()
+{
+	ComPtr<IStream> memStream;
+	ThrowIfFailed(CreateStreamOnHGlobal(nullptr, TRUE, &memStream));
+	ComPtr<IWICStream> stream;
+	ThrowIfFailed(_wicFactory->CreateStream(&stream));
+	ThrowIfFailed(stream->InitializeFromIStream(memStream.Get()));
+	Save(_wicFactory.Get(), stream.Get(), _origWicBitmap.Get());
+	return memStream;
 }
 
 void CImageBox::CreateDeviceDependentResources()
@@ -137,7 +206,7 @@ void CImageBox::CreateDeviceDependentResources()
 	GetClientRect(&rect);
 	ThrowIfFailed(_d2dFactory->CreateHwndRenderTarget(D2D1::RenderTargetProperties(),
 		D2D1::HwndRenderTargetProperties(
-			GetSafeHwnd(), 
+			GetSafeHwnd(),
 			D2D1::SizeU(rect.right - rect.left, rect.bottom - rect.top)), &_renderTarget));
 	ThrowIfFailed(_renderTarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Yellow), &_brush));
 }

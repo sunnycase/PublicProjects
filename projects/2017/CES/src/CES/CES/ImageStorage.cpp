@@ -113,7 +113,6 @@ void CES::ImageStorage::SetSelectedPath(std::wstring&& path)
 	{
 		_selectedPath = _rootDir;
 		_selectedPath.append(path);
-		AfxMessageBox(_selectedPath.c_str());
 		fs::create_directories(_selectedPath);
 		_isPathSelected = true;
 	}
@@ -140,6 +139,11 @@ std::wstring CES::ImageStorage::GetNextAvailableFileName() const
 			break;
 	} while (true);
 	return path;
+}
+
+std::wstring CES::ImageStorage::GetFullPath(std::wstring && relativePath) const
+{
+	return fs::path(_rootDir).append(relativePath);
 }
 
 void CES::ImageStorage::EnsureRootDirectoryExists()
@@ -189,7 +193,6 @@ void CES::ImageStorage::LoadStorageRecursive(const std::experimental::filesystem
 				rapidjson::GenericValue<rapidjson::UTF16<>> fileObj(rapidjson::kObjectType);
 				fileObj.AddMember(L"type", L"file", allocator);
 				fileObj.AddMember(L"fileName", entry.path().filename().wstring(), allocator);
-				fileObj.AddMember(L"filePath", entry.path().wstring(), allocator);
 				destValue.PushBack(std::move(fileObj), allocator);
 			}
 		}

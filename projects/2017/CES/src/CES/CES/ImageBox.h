@@ -15,10 +15,12 @@ public:
 	virtual ~CImageBox();
 
 	void SetPicture(HBITMAP bitmap);
+	void SetPicture(std::wstring_view fileName);
 	void SetZoom(float factor);
 	void Rotate(uint32_t degree);
 	void AutoFitSize();
 	void SaveAs(std::wstring_view fileName);
+	WRL::ComPtr<IStream> SaveToStream();
 protected:
 	DECLARE_MESSAGE_MAP()
 private:

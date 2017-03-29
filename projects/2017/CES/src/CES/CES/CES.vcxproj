@@ -77,26 +77,26 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <TargetExt>.ocx</TargetExt>
-    <IncludePath>$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)..\thirdparty\activemq\x86\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)..\thirdparty\zlib\x86\include;$(SolutionDir)..\thirdparty\minizip\x86\include;$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)..\thirdparty\zlib\x86\lib;$(SolutionDir)..\thirdparty\minizip\x86\lib;$(SolutionDir)..\thirdparty\activemq\x86\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <TargetExt>.ocx</TargetExt>
-    <IncludePath>$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)..\thirdparty\activemq\x64\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)..\thirdparty\zlib\x64\include;$(SolutionDir)..\thirdparty\minizip\x64\include;$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)..\thirdparty\zlib\x64\lib;$(SolutionDir)..\thirdparty\minizip\x64\lib;$(SolutionDir)..\thirdparty\activemq\x64\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <TargetExt>.ocx</TargetExt>
-    <IncludePath>$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)..\thirdparty\activemq\x86\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)..\thirdparty\zlib\x86\include;$(SolutionDir)..\thirdparty\minizip\x86\include;$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)..\thirdparty\zlib\x86\lib;$(SolutionDir)..\thirdparty\minizip\x86\lib;$(SolutionDir)..\thirdparty\activemq\x86\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <TargetExt>.ocx</TargetExt>
-    <IncludePath>$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)..\thirdparty\activemq\x64\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)..\thirdparty\zlib\x64\include;$(SolutionDir)..\thirdparty\minizip\x64\include;$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)..\thirdparty\zlib\x64\lib;$(SolutionDir)..\thirdparty\minizip\x64\lib;$(SolutionDir)..\thirdparty\activemq\x64\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -113,7 +113,9 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -143,7 +145,9 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -177,7 +181,9 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -211,7 +217,9 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>
@@ -245,6 +253,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Uploader.cpp" />
     <ClCompile Include="VideoBox.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -259,6 +268,7 @@
     <ClInclude Include="ResourceContainer.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="Uploader.h" />
     <ClInclude Include="VideoBox.h" />
   </ItemGroup>
   <ItemGroup>

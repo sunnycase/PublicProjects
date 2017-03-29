@@ -18,6 +18,7 @@ namespace CES
 		std::wstring GetStorageJson() const;
 		void SetSelectedPath(std::wstring&& path);
 		std::wstring GetNextAvailableFileName() const;
+		std::wstring GetFullPath(std::wstring&& relativePath) const;
 	private:
 		void EnsureRootDirectoryExists();
 		void LoadStorageRecursive(const std::experimental::filesystem::directory_entry& directory, const rapidjson::GenericValue<rapidjson::UTF16<>>& cntLevelCategories, rapidjson::GenericValue<rapidjson::UTF16<>>& destValue, rapidjson::MemoryPoolAllocator<>& allocator);

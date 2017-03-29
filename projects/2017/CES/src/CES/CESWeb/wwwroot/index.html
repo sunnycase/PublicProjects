@@ -12,7 +12,8 @@
         #ces {
             height: 100%;
         }
-        #tree{
+
+        #tree {
             height: 100%;
         }
     </style>
@@ -29,6 +30,7 @@
                 <button class="btn btn-default" onclick="onRotateRight()">右旋转</button>
                 <button class="btn btn-default" onclick="onZoomIn()">放大</button>
                 <button class="btn btn-default" onclick="onZoomOut()">缩小</button>
+                <button class="btn btn-default" onclick="onUpload()">上传</button>
             </div>
         </div>
         <div class="row" style="height: calc(100% - 40px);">
@@ -154,8 +156,25 @@
             document.getElementById('ces').Zoom = zoom;
         }
 
+        function onUpload() {
+            document.getElementById('ces').UploadCurrentPicture();
+        }
+
         function onCESLoaded(sender) {
             sender.InitializeBusiness(busi, seq, wfId, type, zip, JSON.stringify(categories), ip, destUrl);
+        }
+
+        function getRelativeUri(node, isFile) {
+            var path = '';
+            while (node) {
+                if (isFile && path == '')
+                    path = node.text;
+                else
+                    path = node.text + '/' + path;
+                if (node.parentId === undefined) break;
+                node = $('#tree').treeview('getParents', node)[0];
+            }
+            return path;
         }
 
         $(document).ready(function () {
@@ -163,16 +182,17 @@
             $('#tree').treeview({
                 data: buildTree(),
                 onNodeSelected: function (event, data) {
-                    $('#bn_Scan').removeClass('disabled');
-                    var path = '';
-                    while (data) {
-                        path = data.text + '/' + path;
-                        if (data.parentId === undefined) break;
-                        data = $('#tree').treeview('getParents', data)[0];
+                    if (data.isLeaf) {
+                        $('#bn_Scan').addClass('disabled');
+                        document.getElementById('ces').DisplayPicture(getRelativeUri(data, true));
+                        $('#bn_Scan').text('开始扫描');
+                        isScanning = false;
+                    } else {
+                        $('#bn_Scan').removeClass('disabled');
+                        document.getElementById('ces').SetScanToPath(getRelativeUri(data));
                     }
-                    document.getElementById('ces').SetScanToPath(path);
                 },
-                onNodeUnselected: function () {
+                onNodeUnselected: function (event, data) {
                     if ($('#tree').treeview('getSelected').length == 0) {
                         $('#bn_Scan').addClass('disabled');
                         document.getElementById('ces').SetScanToPath('');

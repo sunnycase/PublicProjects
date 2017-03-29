@@ -3,6 +3,7 @@
 #include "VideoBox.h"
 #include "ImageBox.h"
 #include "ImageStorage.h"
+#include "Uploader.h"
 
 // CESCtrl.h : CCESCtrl ActiveX 控件类的声明。
 
@@ -47,6 +48,8 @@ protected:
 // 调度和事件 ID
 public:
 	enum {
+		dispidUploadCurrentPicture = 9L,
+		dispidDisplayPicture = 8L,
 		dispidSetScanToPath = 7L,
 		dispidGetImageStorageTree = 6L,
 		dispidInitializeBusiness = 5L,
@@ -69,6 +72,8 @@ private:
 	CVideoBox _videoBox;
 	CImageBox _imageWnd;
 	CES::ImageStorage _imageStorage;
+	std::wstring _currentPictureFileName;
+	CES::Uploader _uploader;
 public:
 	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
 	afx_msg void OnSize(UINT nType, int cx, int cy);
@@ -82,5 +87,7 @@ protected:
 	void InitializeBusiness(USHORT busType, LPCTSTR seqId, LPCTSTR workflowId, USHORT storageType, VARIANT_BOOL useZip, LPCTSTR categories, LPCTSTR uploadIp, LPCTSTR uploadUri);
 	BSTR GetImageStorageTree();
 	void SetScanToPath(LPCTSTR path);
+	void DisplayPicture(LPCTSTR uri);
+	void UploadCurrentPicture();
 };
 

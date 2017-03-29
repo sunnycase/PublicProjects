@@ -34,6 +34,8 @@ BEGIN_DISPATCH_MAP(CCESCtrl, COleControl)
 	DISP_FUNCTION_ID(CCESCtrl, "InitializeBusiness", dispidInitializeBusiness, InitializeBusiness, VT_EMPTY, VTS_UI2 VTS_BSTR VTS_BSTR VTS_UI2 VTS_BOOL VTS_BSTR VTS_BSTR VTS_BSTR)
 	DISP_FUNCTION_ID(CCESCtrl, "GetImageStorageTree", dispidGetImageStorageTree, GetImageStorageTree, VT_BSTR, VTS_NONE)
 	DISP_FUNCTION_ID(CCESCtrl, "SetScanToPath", dispidSetScanToPath, SetScanToPath, VT_EMPTY, VTS_BSTR)
+	DISP_FUNCTION_ID(CCESCtrl, "DisplayPicture", dispidDisplayPicture, DisplayPicture, VT_EMPTY, VTS_BSTR)
+	DISP_FUNCTION_ID(CCESCtrl, "UploadCurrentPicture", dispidUploadCurrentPicture, UploadCurrentPicture, VT_EMPTY, VTS_NONE)
 END_DISPATCH_MAP()
 
 // ÊÂ¼þÓ³Éä
@@ -249,7 +251,7 @@ BSTR CCESCtrl::TakePicture()
 
 	auto filePath = _imageStorage.GetNextAvailableFileName();
 	_imageWnd.SaveAs(filePath);
-	
+	_currentPictureFileName = filePath;
 	SetViewState(ViewState::Image);
 	return _bstr_t(std::experimental::filesystem::path(filePath).filename().c_str()).Detach();
 }
@@ -315,4 +317,23 @@ void CCESCtrl::SetScanToPath(LPCTSTR path)
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 	
 	_imageStorage.SetSelectedPath({ path, SysStringLen(const_cast<BSTR>(path)) });
+}
+
+
+void CCESCtrl::DisplayPicture(LPCTSTR uri)
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	auto path = _currentPictureFileName = _imageStorage.GetFullPath(uri);
+	_imageWnd.SetPicture(path);
+	SetViewState(ViewState::Image);
+}
+
+
+void CCESCtrl::UploadCurrentPicture()
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	auto stream = _imageWnd.SaveToStream();
+	_uploader.Upload(stream.Get(), std::experimental::filesystem::path(_currentPictureFileName));
 }
