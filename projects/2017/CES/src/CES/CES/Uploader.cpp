@@ -4,8 +4,12 @@
 #include <minizip\zip.h>
 #include <minizip\ioapi_mem.h>
 #include <filesystem>
+#include <sstream>
+#include <activemq/core/ActiveMQConnectionFactory.h>
+#include <Tomato.Core/encoding.h>
 using namespace WRL;
 using namespace CES;
+using namespace activemq::core;
 namespace fs = std::experimental::filesystem;
 
 namespace
@@ -95,6 +99,29 @@ namespace
 	}
 }
 
+void CES::Uploader::Initialize(std::wstring_view ip, uint16_t port, std::wstring_view destUri, bool useTopic)
+{
+	std::wstringstream brokerUri;
+	brokerUri << L"tcp://" << ip << L':' << port <<
+		        L"?wireFormat=openwire"
+		        L"&connection.useAsyncSend=true"
+		//        L"&transport.commandTracingEnabled=true"
+		//        L"&transport.tcpTracingEnabled=true"
+		        L"&wireFormat.tightEncodingEnabled=true"
+		;
+	ActiveMQConnectionFactory connFactory(NS_CORE::ws2s(brokerUri.str(), CP_ACP));
+	_mqConnection.reset(connFactory.createConnection());
+	_mqSession.reset(_mqConnection->createSession(cms::Session::AcknowledgeMode::AUTO_ACKNOWLEDGE));
+
+	const auto nameUri = NS_CORE::ws2s(destUri, CP_ACP);
+	if (useTopic)
+		_mqDestination.reset(_mqSession->createTopic(nameUri));
+	else
+		_mqDestination.reset(_mqSession->createQueue(nameUri));
+	_mqProducer.reset(_mqSession->createProducer(_mqDestination.get()));
+	_mqProducer->setDeliveryMode(cms::DeliveryMode::NON_PERSISTENT);
+}
+
 void Uploader::Upload(IStream * imageStream, std::wstring && fileName)
 {
 	ULARGE_INTEGER size;
@@ -124,4 +151,12 @@ void Uploader::Upload(IStream * imageStream, std::wstring && fileName)
 	ThrowIfNot(zipWriteInFileInZip(zipFile.get(), imageData, size.LowPart) == Z_OK, L"Cannot write image to zip file.");
 	ThrowIfNot(zipCloseFileInZip(zipFile.get()) == Z_OK, L"Cannot close image file.");
 	ThrowIfFailed(zipClose(zipFile.detach(), nullptr) == Z_OK, L"Cannot close zip file.");
+
+	//std::unique_ptr<cms::TextMessage> fileNameMsg(_mqSession->createTextMessage(zipFileName));
+	//_mqProducer->send(fileNameMsg.get());
+
+	auto restSize = zipmem.limit;
+	const uint32_t bufferSize = 1024 * 64;
+
+	AfxMessageBox(L"上传成功。", MB_OK | MB_ICONINFORMATION);
 }

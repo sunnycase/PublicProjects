@@ -54,6 +54,12 @@
     <ClCompile Include="Uploader.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Encoding.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="EncodingDetector.cpp">
+      <Filter>头文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -93,6 +99,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Uploader.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="EncodingDetector.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

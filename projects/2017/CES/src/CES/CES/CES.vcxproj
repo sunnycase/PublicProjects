@@ -77,25 +77,25 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <TargetExt>.ocx</TargetExt>
-    <IncludePath>$(SolutionDir)..\thirdparty\zlib\x86\include;$(SolutionDir)..\thirdparty\minizip\x86\include;$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\thirdparty\apr\x86\include;$(SolutionDir)..\thirdparty\zlib\x86\include;$(SolutionDir)..\thirdparty\activemq\x86\include;$(SolutionDir)..\thirdparty\minizip\x86\include;$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)..\thirdparty\zlib\x86\lib;$(SolutionDir)..\thirdparty\minizip\x86\lib;$(SolutionDir)..\thirdparty\activemq\x86\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <TargetExt>.ocx</TargetExt>
-    <IncludePath>$(SolutionDir)..\thirdparty\zlib\x64\include;$(SolutionDir)..\thirdparty\minizip\x64\include;$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\thirdparty\apr\x64\include;$(SolutionDir)..\thirdparty\activemq\x64\include;$(SolutionDir)..\thirdparty\zlib\x64\include;$(SolutionDir)..\thirdparty\minizip\x64\include;$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)..\thirdparty\zlib\x64\lib;$(SolutionDir)..\thirdparty\minizip\x64\lib;$(SolutionDir)..\thirdparty\activemq\x64\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <TargetExt>.ocx</TargetExt>
-    <IncludePath>$(SolutionDir)..\thirdparty\zlib\x86\include;$(SolutionDir)..\thirdparty\minizip\x86\include;$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\thirdparty\apr\x86\include;$(SolutionDir)..\thirdparty\zlib\x86\include;$(SolutionDir)..\thirdparty\activemq\x86\include;$(SolutionDir)..\thirdparty\minizip\x86\include;$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)..\thirdparty\zlib\x86\lib;$(SolutionDir)..\thirdparty\minizip\x86\lib;$(SolutionDir)..\thirdparty\activemq\x86\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <TargetExt>.ocx</TargetExt>
-    <IncludePath>$(SolutionDir)..\thirdparty\zlib\x64\include;$(SolutionDir)..\thirdparty\minizip\x64\include;$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\thirdparty\apr\x64\include;$(SolutionDir)..\thirdparty\activemq\x64\include;$(SolutionDir)..\thirdparty\zlib\x64\include;$(SolutionDir)..\thirdparty\minizip\x64\include;$(SolutionDir)..\thirdparty\;$(IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)..\thirdparty\zlib\x64\lib;$(SolutionDir)..\thirdparty\minizip\x64\lib;$(SolutionDir)..\thirdparty\activemq\x64\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -103,7 +103,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>RAPIDJSON_HAS_STDSTRING;WIN32;_WINDOWS;_DEBUG;_USRDLL;%(PreprocessorDefinitions);TOMATO_CORE_EXPORTS;TOMATO_MEDIA_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>RAPIDJSON_HAS_STDSTRING;_HAS_AUTO_PTR_ETC=1;WIN32;_WINDOWS;_DEBUG;_USRDLL;%(PreprocessorDefinitions);TOMATO_CORE_EXPORTS;TOMATO_MEDIA_EXPORTS</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -113,7 +113,7 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;activemq-cpp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
@@ -135,7 +135,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>RAPIDJSON_HAS_STDSTRING;_WINDOWS;_DEBUG;_USRDLL;%(PreprocessorDefinitions);TOMATO_CORE_EXPORTS;TOMATO_MEDIA_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>RAPIDJSON_HAS_STDSTRING;_HAS_AUTO_PTR_ETC=1;_WINDOWS;_DEBUG;_USRDLL;%(PreprocessorDefinitions);TOMATO_CORE_EXPORTS;TOMATO_MEDIA_EXPORTS</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -145,7 +145,7 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;activemq-cpp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
@@ -169,7 +169,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>RAPIDJSON_HAS_STDSTRING;WIN32;_WINDOWS;NDEBUG;_USRDLL;%(PreprocessorDefinitions);TOMATO_CORE_EXPORTS;TOMATO_MEDIA_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>RAPIDJSON_HAS_STDSTRING;_HAS_AUTO_PTR_ETC=1;WIN32;_WINDOWS;NDEBUG;_USRDLL;%(PreprocessorDefinitions);TOMATO_CORE_EXPORTS;TOMATO_MEDIA_EXPORTS</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -181,7 +181,7 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;activemq-cpp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
@@ -205,7 +205,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>RAPIDJSON_HAS_STDSTRING;_WINDOWS;NDEBUG;_USRDLL;%(PreprocessorDefinitions);TOMATO_CORE_EXPORTS;TOMATO_MEDIA_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>RAPIDJSON_HAS_STDSTRING;_HAS_AUTO_PTR_ETC=1;_WINDOWS;NDEBUG;_USRDLL;%(PreprocessorDefinitions);TOMATO_CORE_EXPORTS;TOMATO_MEDIA_EXPORTS</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -217,7 +217,7 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;activemq-cpp.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
@@ -243,6 +243,8 @@
     <ClCompile Include="CES.cpp" />
     <ClCompile Include="CESCtrl.cpp" />
     <ClCompile Include="CESPropPage.cpp" />
+    <ClCompile Include="Encoding.cpp" />
+    <ClCompile Include="EncodingDetector.cpp" />
     <ClCompile Include="FreeList.cpp" />
     <ClCompile Include="ImageBox.cpp" />
     <ClCompile Include="ImageStorage.cpp" />
@@ -262,6 +264,7 @@
     <ClInclude Include="CES.h" />
     <ClInclude Include="CESCtrl.h" />
     <ClInclude Include="CESPropPage.h" />
+    <ClInclude Include="EncodingDetector.h" />
     <ClInclude Include="ImageBox.h" />
     <ClInclude Include="ImageStorage.h" />
     <ClInclude Include="Resource.h" />

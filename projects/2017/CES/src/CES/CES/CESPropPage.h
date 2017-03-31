@@ -1,4 +1,6 @@
 #pragma once
+#include "afxwin.h"
+#include <unordered_map>
 
 // CESPropPage.h : CCESPropPage 属性页类的声明。
 
@@ -24,5 +26,17 @@ protected:
 // 消息映射
 protected:
 	DECLARE_MESSAGE_MAP()
+private:
+	CComboBox m_cbPrimCam;
+	CComboBox m_cbSecndCam;
+
+	std::unordered_map<int, CString> _indexToSymbolicLink;
+	std::unordered_map<std::wstring, int> _symbolicToIndexLink;
+public:
+	virtual BOOL OnInitDialog();
+	virtual void OnOK();
+private:
+	int m_selectedPrimCamIndex;
+	int m_selectedSecndCamIndex;
 };
 

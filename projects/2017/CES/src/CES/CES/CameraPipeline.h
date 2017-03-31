@@ -96,6 +96,13 @@ namespace CES
 		}
 	};
 
+	struct CameraDeviceInfo
+	{
+		std::wstring FriendlyName;
+		std::wstring SymbolicLink;
+		WRL::ComPtr<IMFActivate> Activate;
+	};
+
 	class CameraPipeline : public NS_CORE::WeakReferenceBase<CameraPipeline, WRL::RuntimeClassFlags<WRL::ClassicCom>, IUnknown>
 	{
 	public:
@@ -105,6 +112,9 @@ namespace CES
 		void Start();
 		void TakePicture(CBitmap& bitmap);
 		void OnResize(HWND videohWnd);
+		void InitializeDevice(CameraSource source, LPCWSTR symbolicLink);
+
+		static std::vector<CameraDeviceInfo> EnumerateDevices();
 
 		Event<void()> DeviceReady;
 	private:

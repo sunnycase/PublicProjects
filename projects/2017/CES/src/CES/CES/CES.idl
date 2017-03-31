@@ -22,6 +22,8 @@ library CESLib
 		properties:
 			[id(3)] ULONG Rotation;
 			[id(4)] FLOAT Zoom;
+			[id(10)] BSTR ScannerDeviceId;
+			[id(11)] BSTR CameraDeviceId;
 	methods:
 
 			[id(DISPID_ABOUTBOX)] void AboutBox();
@@ -32,6 +34,7 @@ library CESLib
 			[id(7)] void SetScanToPath(BSTR path);
 			[id(8)] void DisplayPicture(BSTR uri);
 			[id(9)] void UploadCurrentPicture();
+			[id(12)] void ShowPropertyPages();
 	};
 
 	//  CCESCtrl 的事件调度接口

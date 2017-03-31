@@ -36,6 +36,9 @@ BEGIN_DISPATCH_MAP(CCESCtrl, COleControl)
 	DISP_FUNCTION_ID(CCESCtrl, "SetScanToPath", dispidSetScanToPath, SetScanToPath, VT_EMPTY, VTS_BSTR)
 	DISP_FUNCTION_ID(CCESCtrl, "DisplayPicture", dispidDisplayPicture, DisplayPicture, VT_EMPTY, VTS_BSTR)
 	DISP_FUNCTION_ID(CCESCtrl, "UploadCurrentPicture", dispidUploadCurrentPicture, UploadCurrentPicture, VT_EMPTY, VTS_NONE)
+	DISP_PROPERTY_NOTIFY_ID(CCESCtrl, "ScannerDeviceId", dispidScannerDeviceId, m_ScannerDeviceId, OnScannerDeviceIdChanged, VT_BSTR)
+	DISP_PROPERTY_NOTIFY_ID(CCESCtrl, "CameraDeviceId", dispidCameraDeviceId, m_CameraDeviceId, OnCameraDeviceIdChanged, VT_BSTR)
+	DISP_FUNCTION_ID(CCESCtrl, "ShowPropertyPages", dispidShowPropertyPages, ShowPropertyPages, VT_EMPTY, VTS_NONE)
 END_DISPATCH_MAP()
 
 // 事件映射
@@ -108,7 +111,7 @@ BOOL CCESCtrl::CCESCtrlFactory::UpdateRegistry(BOOL bRegister)
 CCESCtrl::CCESCtrl()
 {
 	InitializeIIDs(&IID_DCES, &IID_DCESEvents);
-	//__debugbreak();
+	__debugbreak();
 	// TODO:  在此初始化控件的实例数据。
 }
 
@@ -138,6 +141,8 @@ void CCESCtrl::DoPropExchange(CPropExchange* pPX)
 	COleControl::DoPropExchange(pPX);
 
 	// TODO: 为每个持久的自定义属性调用 PX_ 函数。
+	PX_String(pPX, L"ScannerDeviceId", m_ScannerDeviceId);
+	PX_String(pPX, L"CameraDeviceId", m_CameraDeviceId);
 }
 
 
@@ -199,6 +204,9 @@ int CCESCtrl::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	GetClientRect(&rect);
 	ThrowIfNot(_videoBox.Create(nullptr, WS_CHILD | WS_VISIBLE, rect, this), L"cannot init window.");
 	ThrowIfNot(_imageWnd.Create(nullptr, nullptr, WS_CHILD, rect, this, 65535), L"cannot init window.");
+
+	_cameraPipeline = WRL::Make<CES::CameraPipeline>();
+	_cameraPipeline->DeviceReady.Subscribe([=] { _cameraPipeline->Start(); });
 	return 0;
 }
 
@@ -207,13 +215,7 @@ void CCESCtrl::StartScanning()
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	if (!_cameraPipeline)
-	{
-		_cameraPipeline = WRL::Make<CES::CameraPipeline>();
-		_cameraPipeline->DeviceReady.Subscribe([=] { _cameraPipeline->Start(); });
-
-		_cameraPipeline->OpenCamera(CES::CameraSource::Scanner, _videoBox.GetSafeHwnd());
-	}
+	_cameraPipeline->OpenCamera(CES::CameraSource::Scanner, _videoBox.GetSafeHwnd());
 
 	SetViewState(ViewState::Video);
 }
@@ -315,7 +317,7 @@ BSTR CCESCtrl::GetImageStorageTree()
 void CCESCtrl::SetScanToPath(LPCTSTR path)
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
-	
+
 	_imageStorage.SetSelectedPath({ path, SysStringLen(const_cast<BSTR>(path)) });
 }
 
@@ -336,4 +338,32 @@ void CCESCtrl::UploadCurrentPicture()
 
 	auto stream = _imageWnd.SaveToStream();
 	_uploader.Upload(stream.Get(), std::experimental::filesystem::path(_currentPictureFileName));
+}
+
+
+void CCESCtrl::OnScannerDeviceIdChanged()
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	_cameraPipeline->InitializeDevice(CES::CameraSource::Scanner, m_ScannerDeviceId.GetBuffer());
+
+	SetModifiedFlag();
+}
+
+
+void CCESCtrl::OnCameraDeviceIdChanged()
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	_cameraPipeline->InitializeDevice(CES::CameraSource::Camera, m_CameraDeviceId.GetBuffer());
+
+	SetModifiedFlag();
+}
+
+
+void CCESCtrl::ShowPropertyPages()
+{
+	AFX_MANAGE_STATE(AfxGetStaticModuleState());
+
+	m_xOleObject.DoVerb(OLEIVERB_PROPERTIES, NULL, NULL, 0, GetSafeHwnd(), NULL);
 }

@@ -48,6 +48,9 @@ protected:
 // 调度和事件 ID
 public:
 	enum {
+		dispidShowPropertyPages = 12L,
+		dispidCameraDeviceId = 11,
+		dispidScannerDeviceId = 10,
 		dispidUploadCurrentPicture = 9L,
 		dispidDisplayPicture = 8L,
 		dispidSetScanToPath = 7L,
@@ -89,5 +92,10 @@ protected:
 	void SetScanToPath(LPCTSTR path);
 	void DisplayPicture(LPCTSTR uri);
 	void UploadCurrentPicture();
+	void OnScannerDeviceIdChanged();
+	CString m_ScannerDeviceId;
+	void OnCameraDeviceIdChanged();
+	CString m_CameraDeviceId;
+	void ShowPropertyPages();
 };
 

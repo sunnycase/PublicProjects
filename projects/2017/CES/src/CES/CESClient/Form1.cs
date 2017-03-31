@@ -33,5 +33,10 @@ namespace CESClient
                 _isScanning = true;
             }
         }
+
+        private void bn_SetOptions_Click(object sender, EventArgs e)
+        {
+            ax_CES.ShowPropertyPages();
+        }
     }
 }

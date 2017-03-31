@@ -128,7 +128,7 @@ void CameraPipeline::OpenCamera(CameraSource source, HWND videohWnd)
 {
 	IMFMediaSource* mediaSource = source == CameraSource::Camera ? _cameraSource.Get() : _scannerSource.Get();
 	if (!mediaSource)
-		ThrowAlways(L"摄像头未连接，或驱动未安装。");
+		ThrowIfFailed(HRESULT_FROM_WIN32(ERROR_DEVICE_NOT_AVAILABLE));
 	_source = source;
 
 	ComPtr<IMFTopology> topology;
@@ -171,7 +171,36 @@ void CES::CameraPipeline::OnResize(HWND videohWnd)
 	}
 }
 
-void CameraPipeline::CreateDeviceDependentResources()
+void CES::CameraPipeline::InitializeDevice(CameraSource source, LPCWSTR symbolicLink)
+{
+	ComPtr<IMFAttributes> attributes;
+	ThrowIfFailed(MFCreateAttributes(&attributes, 2));
+
+	ThrowIfFailed(attributes->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID));
+	ThrowIfFailed(attributes->SetString(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, symbolicLink));
+
+	unique_cotaskmem_arr<ComPtr<IMFActivate>> activators;
+	UINT32 count;
+	ThrowIfFailed(MFEnumDeviceSources(attributes.Get(), reinterpret_cast<IMFActivate***>(&activators._Myptr()), &count));
+	if (count)
+	{
+		ComPtr<IMFMediaSource> mediaSource;
+		ThrowIfFailed(activators[0]->ActivateObject(IID_PPV_ARGS(&mediaSource)));
+		switch (source)
+		{
+		case CES::CameraSource::Camera:
+			_cameraSource = std::move(mediaSource);
+			break;
+		case CES::CameraSource::Scanner:
+			_scannerSource = std::move(mediaSource);
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+std::vector<CameraDeviceInfo> CES::CameraPipeline::EnumerateDevices()
 {
 	ComPtr<IMFAttributes> attributes;
 	ThrowIfFailed(MFCreateAttributes(&attributes, 1));
@@ -181,13 +210,25 @@ void CameraPipeline::CreateDeviceDependentResources()
 	unique_cotaskmem_arr<ComPtr<IMFActivate>> activators;
 	UINT32 count;
 	ThrowIfFailed(MFEnumDeviceSources(attributes.Get(), reinterpret_cast<IMFActivate***>(&activators._Myptr()), &count));
-	if (count > 0)
-		ThrowIfFailed(activators[0]->ActivateObject(IID_PPV_ARGS(&_scannerSource)));
-	if (count > 1)
-		ThrowIfFailed(activators[1]->ActivateObject(IID_PPV_ARGS(&_cameraSource)));
+	
+	std::vector<CameraDeviceInfo> result;
+	result.reserve(count);
+	for (size_t i = 0; i < count; i++)
+	{
+		auto& activator = activators[i];
+		unique_cotaskmem_arr<WCHAR> name; UINT32 nameLen;
+		ThrowIfFailed(activator->GetAllocatedString(MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, &name._Myptr(), &nameLen));
+		unique_cotaskmem_arr<WCHAR> link; UINT32 linkLen;
+		ThrowIfFailed(activator->GetAllocatedString(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, &link._Myptr(), &linkLen));
+		result.emplace_back(CameraDeviceInfo{ name.get(), link.get(), std::move(activator)});
+	}
+	return result;
 }
 
-#include <wmcodecdsp.h>
+void CameraPipeline::CreateDeviceDependentResources()
+{
+
+}
 
 void CameraPipeline::CreateDeviceIndependentResources()
 {
