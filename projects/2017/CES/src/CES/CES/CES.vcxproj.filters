@@ -36,9 +36,6 @@
     <ClCompile Include="CameraPipeline.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="MFWorkerQueueProvider.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="FreeList.cpp">
       <Filter>源文件</Filter>
     </ClCompile>

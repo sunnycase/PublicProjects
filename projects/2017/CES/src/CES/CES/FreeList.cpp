@@ -7,6 +7,7 @@
 #include "stdafx.h"
 #include <Tomato.Core/FreeList.h>
 #include <algorithm>
+#include <cassert>
 
 using namespace NS_CORE;
 

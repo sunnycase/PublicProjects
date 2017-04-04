@@ -298,6 +298,7 @@ void CImageBox::OnSize(UINT nType, int cx, int cy)
 	RECT rect;
 	GetClientRect(&rect);
 	ThrowIfFailed(_renderTarget->Resize(D2D1::SizeU(rect.right - rect.left, rect.bottom - rect.top)));
+	UpdateScrollSizes();
 }
 
 

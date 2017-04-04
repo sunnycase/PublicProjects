@@ -109,7 +109,8 @@ void CES::Uploader::Initialize(std::wstring_view ip, uint16_t port, std::wstring
 		//        L"&transport.tcpTracingEnabled=true"
 		        L"&wireFormat.tightEncodingEnabled=true"
 		;
-	ActiveMQConnectionFactory connFactory(NS_CORE::ws2s(brokerUri.str(), CP_ACP));
+	const auto brokerUriStr = NS_CORE::ws2s(brokerUri.str(), CP_ACP);
+	ActiveMQConnectionFactory connFactory(brokerUriStr);
 	_mqConnection.reset(connFactory.createConnection());
 	_mqSession.reset(_mqConnection->createSession(cms::Session::AcknowledgeMode::AUTO_ACKNOWLEDGE));
 
@@ -152,11 +153,13 @@ void Uploader::Upload(IStream * imageStream, std::wstring && fileName)
 	ThrowIfNot(zipCloseFileInZip(zipFile.get()) == Z_OK, L"Cannot close image file.");
 	ThrowIfFailed(zipClose(zipFile.detach(), nullptr) == Z_OK, L"Cannot close zip file.");
 
-	//std::unique_ptr<cms::TextMessage> fileNameMsg(_mqSession->createTextMessage(zipFileName));
-	//_mqProducer->send(fileNameMsg.get());
+	std::unique_ptr<cms::TextMessage> fileNameMsg(_mqSession->createTextMessage(zipFileName));
+	_mqProducer->send(fileNameMsg.get());
 
 	auto restSize = zipmem.limit;
-	const uint32_t bufferSize = 1024 * 64;
+	std::unique_ptr<cms::BytesMessage> fileContentMsg(_mqSession->createBytesMessage(
+		reinterpret_cast<const unsigned char*>(zipmem.base), restSize));
+	_mqProducer->send(fileContentMsg.get());
 
 	AfxMessageBox(L"上传成功。", MB_OK | MB_ICONINFORMATION);
 }

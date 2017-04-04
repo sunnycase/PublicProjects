@@ -3,10 +3,9 @@
 #include <Tomato.Media/MFAsyncCallback.h>
 #include <Tomato.Core/OperationQueue.h>
 #include <vector>
-#include <evr.h>
-#include <d3d9.h>
-#include <evr9.h>
 #include <afxwin.h>
+#include <d3d9.h>
+#include <vmr9.h>
 
 namespace CES
 {
@@ -14,51 +13,6 @@ namespace CES
 	{
 		Camera,
 		Scanner
-	};
-
-	enum class CameraPipelineOperationKind
-	{
-		// 无
-		None,
-		// 开始
-		Start,
-		// 暂停
-		Pause,
-		// 停止
-		Stop,
-		// 设置速率
-		SetRate,
-		// 请求数据
-		RequestData,
-		// 到达结尾
-		EndOfStream,
-		Event
-	};
-
-	class CameraPipelineOperation
-	{
-	public:
-		CameraPipelineOperation(CameraPipelineOperationKind kind) noexcept
-			: kind(kind)
-		{
-
-		}
-
-		virtual ~CameraPipelineOperation()
-		{
-
-		}
-
-		CameraPipelineOperation() noexcept
-			: CameraPipelineOperation(CameraPipelineOperationKind::None)
-		{
-
-		}
-
-		// 获取类型
-		CameraPipelineOperationKind GetKind() const noexcept { return kind; }
-	private:
-		CameraPipelineOperationKind kind;
 	};
 
 	template<class THandler>
@@ -100,7 +54,6 @@ namespace CES
 	{
 		std::wstring FriendlyName;
 		std::wstring SymbolicLink;
-		WRL::ComPtr<IMFActivate> Activate;
 	};
 
 	class CameraPipeline : public NS_CORE::WeakReferenceBase<CameraPipeline, WRL::RuntimeClassFlags<WRL::ClassicCom>, IUnknown>
@@ -112,6 +65,8 @@ namespace CES
 		void Start();
 		void TakePicture(CBitmap& bitmap);
 		void OnResize(HWND videohWnd);
+		void OnPaint(HWND videohWnd, HDC videoDC);
+		void OnDisplayChange();
 		void InitializeDevice(CameraSource source, LPCWSTR symbolicLink);
 
 		static std::vector<CameraDeviceInfo> EnumerateDevices();
@@ -120,23 +75,15 @@ namespace CES
 	private:
 		void CreateDeviceDependentResources();
 		void CreateDeviceIndependentResources();
-		void CreateSession();
-		void ConfigureTopology(IMFTopology* topology, IMFMediaSource* source, HWND videohWnd);
-		void AddBranchToPartialTopology(IMFTopology * topology, IMFMediaSource * source, IMFPresentationDescriptor* pd, DWORD streamId, HWND hWnd);
-		void OnMediaSessionEvent(IMFAsyncResult* pAsyncResult);
-		void OnDispatchOperation(std::shared_ptr<CameraPipelineOperation>& op);
-
-		void ProcessMediaSessionEvent(IMFMediaEvent* event);
-		void ProcessStart();
-		void ProcessSessionTopologyStatus(IMFMediaEvent* event);
+		void CreateGraph(ICaptureGraphBuilder2** captureGraphBuilder, IGraphBuilder** graph, IBaseFilter** vmrFilter);
+		void ConfigureGraph(ICaptureGraphBuilder2* captureGraphBuilder, IGraphBuilder* graph, IBaseFilter* source, IBaseFilter* vmrFilter, HWND videohWnd, IVMRWindowlessControl9** videoControl);
 	private:
-		WRL::ComPtr<IMFMediaSource> _cameraSource;
-		WRL::ComPtr<IMFMediaSource> _scannerSource;
-		WRL::ComPtr<IMFMediaSession> _mediaSession;
-		WRL::ComPtr<IMFVideoDisplayControl> _videoDispCtrl;
-		WRL::ComPtr<IMFVideoProcessor> _videoProcessor;
+		WRL::ComPtr<ICaptureGraphBuilder2> _captureGraphBuilder;
+		WRL::ComPtr<IGraphBuilder> _graphBuilder;
 		CameraSource _source;
-		WRL::ComPtr<NS_MEDIA::MFAsyncCallbackWithWeakRef<CameraPipeline>> _mediaSessionAsyncCallback;
-		std::shared_ptr<NS_CORE::OperationQueue<std::shared_ptr<CameraPipelineOperation>>> _operationQueue;
+		WRL::ComPtr<IBaseFilter> _cameraSource;
+		WRL::ComPtr<IBaseFilter> _scannerSource;
+		WRL::ComPtr<IVMRWindowlessControl9> _videoControl;
+		WRL::ComPtr<IMediaControl> _mediaControl;
 	};
 }

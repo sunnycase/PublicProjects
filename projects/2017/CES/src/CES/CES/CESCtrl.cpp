@@ -105,13 +105,18 @@ BOOL CCESCtrl::CCESCtrlFactory::UpdateRegistry(BOOL bRegister)
 		return AfxOleUnregisterClass(m_clsid, m_lpszProgID);
 }
 
+#define REPORT_ERROR(name)																		\
+catch (tomato_error& ex) { ::MessageBox(nullptr, ex.message, name, MB_OK | MB_ICONERROR); throw; }			\
+catch (_com_error& ex) { ::MessageBox(nullptr, ex.ErrorMessage(), name, MB_OK | MB_ICONERROR); throw; }	\
+catch (...) { ::MessageBox(nullptr, L"意外错误", name, MB_OK | MB_ICONERROR); throw; }
+
 
 // CCESCtrl::CCESCtrl - 构造函数
 
 CCESCtrl::CCESCtrl()
 {
 	InitializeIIDs(&IID_DCES, &IID_DCESEvents);
-	__debugbreak();
+	//__debugbreak();
 	// TODO:  在此初始化控件的实例数据。
 }
 
@@ -198,24 +203,28 @@ void CCESCtrl::SetViewState(ViewState state)
 
 int CCESCtrl::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
-	if (COleControl::OnCreate(lpCreateStruct) == -1)
-		return -1;
-	RECT rect;
-	GetClientRect(&rect);
-	ThrowIfNot(_videoBox.Create(nullptr, WS_CHILD | WS_VISIBLE, rect, this), L"cannot init window.");
-	ThrowIfNot(_imageWnd.Create(nullptr, nullptr, WS_CHILD, rect, this, 65535), L"cannot init window.");
+	try
+	{
+		if (COleControl::OnCreate(lpCreateStruct) == -1)
+			return -1;
+		RECT rect;
+		GetClientRect(&rect);
+		ThrowIfNot(_videoBox.Create(nullptr, WS_CHILD | WS_VISIBLE, rect, this), L"cannot init window.");
+		ThrowIfNot(_imageWnd.Create(nullptr, nullptr, WS_CHILD, rect, this, 65535), L"cannot init window.");
 
-	_cameraPipeline = WRL::Make<CES::CameraPipeline>();
-	_cameraPipeline->DeviceReady.Subscribe([=] { _cameraPipeline->Start(); });
-	return 0;
+		_cameraPipeline = WRL::Make<CES::CameraPipeline>();
+		_videoBox.SetCameraPipeline(_cameraPipeline.Get());
+		_cameraPipeline->DeviceReady.Subscribe([=] { _cameraPipeline->Start(); });
+
+		return 0;
+	}
+	REPORT_ERROR(L"OnCreate");
 }
 
 
 void CCESCtrl::StartScanning()
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
-
-	_cameraPipeline->OpenCamera(CES::CameraSource::Scanner, _videoBox.GetSafeHwnd());
 
 	SetViewState(ViewState::Video);
 }
@@ -231,12 +240,14 @@ void CCESCtrl::OnSize(UINT nType, int cx, int cy)
 		return;
 	}
 
-	RECT rect;
-	GetClientRect(&rect);
-	_videoBox.MoveWindow(&rect);
-	if (_cameraPipeline)
-		_cameraPipeline->OnResize(_videoBox.GetSafeHwnd());
-	_imageWnd.MoveWindow(&rect);
+	try
+	{
+		RECT rect;
+		GetClientRect(&rect);
+		_videoBox.MoveWindow(&rect);
+		_imageWnd.MoveWindow(&rect);
+	}
+	REPORT_ERROR(L"OnSize");
 }
 
 
@@ -244,18 +255,22 @@ BSTR CCESCtrl::TakePicture()
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	if (!_cameraPipeline)
-		ThrowIfFailed(E_NOT_VALID_STATE);
+	try
+	{
+		if (!_cameraPipeline)
+			ThrowIfFailed(E_NOT_VALID_STATE);
 
-	CBitmap bitmap;
-	_cameraPipeline->TakePicture(bitmap);
-	_imageWnd.SetPicture(bitmap);
+		CBitmap bitmap;
+		_cameraPipeline->TakePicture(bitmap);
+		_imageWnd.SetPicture(bitmap);
 
-	auto filePath = _imageStorage.GetNextAvailableFileName();
-	_imageWnd.SaveAs(filePath);
-	_currentPictureFileName = filePath;
-	SetViewState(ViewState::Image);
-	return _bstr_t(std::experimental::filesystem::path(filePath).filename().c_str()).Detach();
+		auto filePath = _imageStorage.GetNextAvailableFileName();
+		_imageWnd.SaveAs(filePath);
+		_currentPictureFileName = filePath;
+		SetViewState(ViewState::Image);
+		return _bstr_t(std::experimental::filesystem::path(filePath).filename().c_str()).Detach();
+	}
+	REPORT_ERROR(L"TakePicture");
 }
 
 
@@ -303,7 +318,12 @@ void CCESCtrl::InitializeBusiness(USHORT busType, LPCTSTR seqId, LPCTSTR workflo
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	_imageStorage.Initialize(storageType == 0 ? workflowId : seqId, categories);
+	try
+	{
+		_imageStorage.Initialize(storageType == 0 ? workflowId : seqId, categories);
+	}
+	REPORT_ERROR(L"InitializeBusiness");
+	//_uploader.Initialize(uploadIp, 61616, uploadUri, false);
 }
 
 
@@ -318,7 +338,17 @@ void CCESCtrl::SetScanToPath(LPCTSTR path)
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	_imageStorage.SetSelectedPath({ path, SysStringLen(const_cast<BSTR>(path)) });
+	try
+	{
+		auto newSource = std::wstring(path).find(L"人像") == std::wstring::npos ? CES::CameraSource::Scanner : CES::CameraSource::Camera;
+		if (newSource != _cameraSource)
+		{
+			_cameraPipeline->OpenCamera(newSource, _videoBox.GetSafeHwnd());
+			_cameraSource = newSource;
+		}
+		_imageStorage.SetSelectedPath({ path, SysStringLen(const_cast<BSTR>(path)) });
+	}
+	REPORT_ERROR(L"SetScanToPath");
 }
 
 
@@ -337,7 +367,8 @@ void CCESCtrl::UploadCurrentPicture()
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
 	auto stream = _imageWnd.SaveToStream();
-	_uploader.Upload(stream.Get(), std::experimental::filesystem::path(_currentPictureFileName));
+	MessageBox(L"上传成功。", nullptr, MB_OK | MB_ICONINFORMATION);
+	//_uploader.Upload(stream.Get(), std::experimental::filesystem::path(_currentPictureFileName));
 }
 
 
@@ -345,8 +376,12 @@ void CCESCtrl::OnScannerDeviceIdChanged()
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	_cameraPipeline->InitializeDevice(CES::CameraSource::Scanner, m_ScannerDeviceId.GetBuffer());
+	try
+	{
+		_cameraPipeline->InitializeDevice(CES::CameraSource::Scanner, m_ScannerDeviceId.GetBuffer());
 
+	}
+	REPORT_ERROR(L"OnScannerDeviceIdChanged");
 	SetModifiedFlag();
 }
 
@@ -355,7 +390,11 @@ void CCESCtrl::OnCameraDeviceIdChanged()
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
-	_cameraPipeline->InitializeDevice(CES::CameraSource::Camera, m_CameraDeviceId.GetBuffer());
+	try
+	{
+		_cameraPipeline->InitializeDevice(CES::CameraSource::Camera, m_CameraDeviceId.GetBuffer());
+	}
+	REPORT_ERROR(L"OnCameraDeviceIdChanged");
 
 	SetModifiedFlag();
 }

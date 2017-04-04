@@ -91,12 +91,14 @@ BOOL CCESPropPage::OnInitDialog()
 
 	const auto devices = CES::CameraPipeline::EnumerateDevices();
 
+	int index = 0;
 	for (auto&& device : devices)
 	{
-		auto index = m_cbPrimCam.AddString(device.FriendlyName.c_str());
+		m_cbPrimCam.AddString(device.FriendlyName.c_str());
 		m_cbSecndCam.AddString(device.FriendlyName.c_str());
 		_indexToSymbolicLink.emplace(index, device.SymbolicLink.c_str());
 		_symbolicToIndexLink.emplace(device.SymbolicLink, index);
+		index++;
 	}
 
 	return TRUE;

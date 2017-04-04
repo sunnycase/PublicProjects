@@ -23,16 +23,9 @@
 #endif // _AFX_NO_AFXCMN_SUPPORT
 
 
-#include <d3d9.h>
-#include <initguid.h>
-#include <dxva2api.h>
-#undef INITGUID
-#include <initguid.h>
-
-#include <mfidl.h>
-#include <mfapi.h>
-#include <Mferror.h>
 #include <afxwin.h>
 #include <afxcontrolbars.h>
 #include <afxdisp.h>
 #include <afxdisp.h>
+
+#include <dshow.h>

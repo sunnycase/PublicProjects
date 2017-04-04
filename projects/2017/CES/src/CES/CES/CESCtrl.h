@@ -77,6 +77,7 @@ private:
 	CES::ImageStorage _imageStorage;
 	std::wstring _currentPictureFileName;
 	CES::Uploader _uploader;
+	CES::CameraSource _cameraSource;
 public:
 	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
 	afx_msg void OnSize(UINT nType, int cx, int cy);

@@ -1,228 +1,165 @@
 #include "stdafx.h"
 #include "CameraPipeline.h"
-#include <Tomato.Media/MFWorkerQueueProvider.h>
 #include <DirectXMath.h>
 
 using namespace WRL;
 using namespace CES;
 
-namespace
-{
-	class CamraPipelineMediaEventOperation : public CameraPipelineOperation
-	{
-	public:
-		CamraPipelineMediaEventOperation(IMFMediaEvent* event) noexcept
-			: CameraPipelineOperation(CameraPipelineOperationKind::Event), _event(event)
-		{
-
-		}
-
-		IMFMediaEvent* GetEvent() const noexcept { return _event.Get(); }
-	private:
-		ComPtr<IMFMediaEvent> _event;
-	};
-}
+#define REPORT_ERROR(name)																		\
+catch (tomato_error& ex) { MessageBox(nullptr, ex.message, name, MB_OK | MB_ICONERROR); throw; }			\
+catch (_com_error& ex) { MessageBox(nullptr, ex.ErrorMessage(), name, MB_OK | MB_ICONERROR); throw; }	\
+catch (...) { MessageBox(nullptr, L"意外错误", name, MB_OK | MB_ICONERROR); throw; }
 
 CameraPipeline::CameraPipeline()
-	:_operationQueue(std::make_shared<NS_CORE::OperationQueue<std::shared_ptr<CameraPipelineOperation>>>(
-		[weak = AsWeak()](std::shared_ptr<CameraPipelineOperation>& op)
 {
-	if (auto me = weak.Resolve<CameraPipeline>()) me->OnDispatchOperation(op);
-}))
-{
-	ThrowIfFailed(MFStartup(MFSTARTUP_LITE));
-	_operationQueue->SetWorkerQueue(NS_MEDIA::MFWorkerQueueProvider::GetAudio());
-
-	CreateSession();
 	CreateDeviceIndependentResources();
 	CreateDeviceDependentResources();
 }
 
-void CameraPipeline::OnMediaSessionEvent(IMFAsyncResult * pAsyncResult)
-{
-	ComPtr<IMFMediaEvent> event;
-	ThrowIfFailed(_mediaSession->EndGetEvent(pAsyncResult, &event));
-
-	MediaEventType eventType;
-	ThrowIfFailed(event->GetType(&eventType));
-	if (eventType != MESessionClosed)
-		ThrowIfFailed(_mediaSession->BeginGetEvent(_mediaSessionAsyncCallback.Get(), nullptr));
-	_operationQueue->Enqueue(std::make_shared<CamraPipelineMediaEventOperation>(event.Get()));
-}
-
-void CameraPipeline::OnDispatchOperation(std::shared_ptr<CameraPipelineOperation>& op)
-{
-	auto& opRef = *op;
-	switch (opRef.GetKind())
-	{
-	case CameraPipelineOperationKind::Event:
-		ProcessMediaSessionEvent(static_cast<CamraPipelineMediaEventOperation&>(opRef).GetEvent());
-		break;
-	case CameraPipelineOperationKind::Start:
-		ProcessStart();
-		break;
-	default:
-		break;
-	}
-}
-
-void CameraPipeline::ProcessMediaSessionEvent(IMFMediaEvent * event)
-{
-	MediaEventType eventType;
-	ThrowIfFailed(event->GetType(&eventType));
-
-	HRESULT hr;
-	ThrowIfFailed(event->GetStatus(&hr));
-	ThrowIfFailed(hr);
-
-	switch (eventType)
-	{
-	case MESessionTopologyStatus:
-		ProcessSessionTopologyStatus(event);
-		break;
-	default:
-		break;
-	}
-
-}
-
-void CameraPipeline::ProcessStart()
-{
-	auto session = _mediaSession;
-	if (session)
-	{
-		PROPVARIANT varStart;
-		PropVariantInit(&varStart);
-		ThrowIfFailed(session->Start(&GUID_NULL, &varStart));
-	}
-}
-
-void CameraPipeline::ProcessSessionTopologyStatus(IMFMediaEvent * event)
-{
-	UINT32 status;
-	ThrowIfFailed(event->GetUINT32(MF_EVENT_TOPOLOGY_STATUS, &status));
-	if (status == MF_TOPOSTATUS_READY)
-	{
-		ThrowIfFailed(MFGetService(_mediaSession.Get(), MR_VIDEO_RENDER_SERVICE, IID_PPV_ARGS(&_videoDispCtrl)));
-		ThrowIfFailed(MFGetService(_mediaSession.Get(), MR_VIDEO_MIXER_SERVICE, IID_PPV_ARGS(&_videoProcessor)));
-
-		DeviceReady.Publish();
-	}
-	else if(status == MF_TOPOSTATUS_STARTED_SOURCE)
-	{
-		DXVA2_ValueRange saturationRange;
-		ThrowIfFailed(_videoProcessor->GetProcAmpRange(DXVA2_ProcAmp_Saturation, &saturationRange));
-		//_videoDispCtrl->GetCurrentImage()
-		DXVA2_ProcAmpValues values{};
-
-		// 文件、单据、证件: 黑白
-		if (_source == CameraSource::Scanner)
-			values.Saturation = saturationRange.MinValue;
-		else
-			values.Saturation = saturationRange.DefaultValue;
-		ThrowIfFailed(_videoProcessor->SetProcAmpValues(DXVA2_ProcAmp_Saturation, &values));
-	}
-}
-
 void CameraPipeline::OpenCamera(CameraSource source, HWND videohWnd)
 {
-	IMFMediaSource* mediaSource = source == CameraSource::Camera ? _cameraSource.Get() : _scannerSource.Get();
+	auto mediaSource = (source == CameraSource::Camera) ? _cameraSource.Get() : _scannerSource.Get();
 	if (!mediaSource)
 		ThrowIfFailed(HRESULT_FROM_WIN32(ERROR_DEVICE_NOT_AVAILABLE));
 	_source = source;
 
-	ComPtr<IMFTopology> topology;
-	ThrowIfFailed(MFCreateTopology(&topology));
+	ComPtr<ICaptureGraphBuilder2> captureGraphBuilder;
+	ComPtr<IGraphBuilder> graph;
+	ComPtr<IBaseFilter> vmrFilter;
+	CreateGraph(&captureGraphBuilder, &graph, &vmrFilter);;
+	ComPtr<IVMRWindowlessControl9> videoControl;
+	ConfigureGraph(captureGraphBuilder.Get(), graph.Get(), mediaSource, vmrFilter.Get(), videohWnd, &videoControl);
 
-	ConfigureTopology(topology.Get(), mediaSource, videohWnd);
-	ThrowIfFailed(_mediaSession->SetTopology(0, topology.Get()));
+	_videoControl = std::move(videoControl);
+	ThrowIfFailed(graph.As(&_mediaControl));
+
+	DeviceReady.Publish();
 }
 
 void CameraPipeline::Start()
 {
-	_operationQueue->Enqueue(std::make_shared<CameraPipelineOperation>(CameraPipelineOperationKind::Start));
+	try
+	{
+		ThrowIfFailed(_mediaControl->Run());
+	}
+	REPORT_ERROR(L"Start");
 }
 
 #define DIB_WIDTHBYTES(bits) ((((bits) + 31)>>5)<<2)
 
-void CES::CameraPipeline::TakePicture(CBitmap& bitmap)
+void CameraPipeline::TakePicture(CBitmap& bitmap)
 {
-	auto dispCtrl = _videoDispCtrl;
-	ThrowIfNot(dispCtrl, L"扫描未开始。");
+	auto videoControl = _videoControl;
+	ThrowIfNot(videoControl, L"扫描未开始。");
 
-	BITMAPINFOHEADER biHeader{};
-	biHeader.biSize = sizeof(biHeader);
 	unique_cotaskmem_arr<BYTE> bitmapData;
-	DWORD dataSize;
-	LONGLONG timestamp;
-	ThrowIfFailed(dispCtrl->GetCurrentImage(&biHeader, &bitmapData._Myptr(), &dataSize, &timestamp));
+	ThrowIfFailed(videoControl->GetCurrentImage(&bitmapData._Myptr()));
 
-	bitmap.CreateBitmap(biHeader.biWidth, biHeader.biHeight, biHeader.biPlanes, biHeader.biBitCount, bitmapData.get());
+	auto biHeader = reinterpret_cast<const BITMAPINFOHEADER*>(bitmapData.get());
+	bitmap.CreateBitmap(biHeader->biWidth, biHeader->biHeight, biHeader->biPlanes, biHeader->biBitCount,
+		bitmapData.get() + sizeof(BITMAPINFOHEADER));
 }
 
-void CES::CameraPipeline::OnResize(HWND videohWnd)
+void CameraPipeline::OnResize(HWND videohWnd)
 {
-	if (auto videoDispCtrl = _videoDispCtrl)
+	if (auto videoControl = _videoControl)
 	{
 		RECT rect;
 		ThrowWin32IfNot(GetClientRect(videohWnd, &rect));
-		static const MFVideoNormalizedRect nrect{ 0, 0, 1, 1 };
-		ThrowIfFailed(videoDispCtrl->SetVideoPosition(&nrect, &rect));
+		ThrowIfFailed(videoControl->SetVideoPosition(nullptr, &rect));
 	}
 }
 
-void CES::CameraPipeline::InitializeDevice(CameraSource source, LPCWSTR symbolicLink)
+void CameraPipeline::OnPaint(HWND videohWnd, HDC videoDC)
 {
-	ComPtr<IMFAttributes> attributes;
-	ThrowIfFailed(MFCreateAttributes(&attributes, 2));
-
-	ThrowIfFailed(attributes->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID));
-	ThrowIfFailed(attributes->SetString(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, symbolicLink));
-
-	unique_cotaskmem_arr<ComPtr<IMFActivate>> activators;
-	UINT32 count;
-	ThrowIfFailed(MFEnumDeviceSources(attributes.Get(), reinterpret_cast<IMFActivate***>(&activators._Myptr()), &count));
-	if (count)
+	if (auto videoControl = _videoControl)
 	{
-		ComPtr<IMFMediaSource> mediaSource;
-		ThrowIfFailed(activators[0]->ActivateObject(IID_PPV_ARGS(&mediaSource)));
-		switch (source)
+		ThrowIfFailed(videoControl->RepaintVideo(videohWnd, videoDC));
+	}
+}
+
+void CameraPipeline::OnDisplayChange()
+{
+	if (auto videoControl = _videoControl)
+	{
+		ThrowIfFailed(videoControl->DisplayModeChanged());
+	}
+}
+
+namespace
+{
+	ComPtr<IBaseFilter> CraeteDeviceFilter(std::wstring_view desiredDevicePath)
+	{
+		ComPtr<ICreateDevEnum> devEnum;
+		ThrowIfFailed(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&devEnum)));
+		ComPtr<IEnumMoniker> enumMoniker;
+		ThrowIfFailed(devEnum->CreateClassEnumerator(CLSID_VideoInputDeviceCategory, &enumMoniker, 0));
+
+		ComPtr<IBaseFilter> result;
+		ComPtr<IMoniker> moniker;
+		while (enumMoniker->Next(1, &moniker, nullptr) == S_OK)
 		{
-		case CES::CameraSource::Camera:
-			_cameraSource = std::move(mediaSource);
-			break;
-		case CES::CameraSource::Scanner:
-			_scannerSource = std::move(mediaSource);
-			break;
-		default:
-			break;
+			ComPtr<IPropertyBag> propertyBag;
+			if (SUCCEEDED((moniker->BindToStorage(nullptr, nullptr, IID_PPV_ARGS(&propertyBag)))))
+			{
+				variant_t devicePath;
+				if (SUCCEEDED((propertyBag->Read(L"DevicePath", &devicePath, nullptr))))
+				{
+					if (devicePath.bstrVal == desiredDevicePath)
+					{
+						ThrowIfFailed(moniker->BindToObject(nullptr, nullptr, IID_PPV_ARGS(&result)));
+						break;
+					}
+				}
+			}
 		}
+		return result;
+	}
+}
+
+void CameraPipeline::InitializeDevice(CameraSource source, LPCWSTR symbolicLink)
+{
+	auto device = CraeteDeviceFilter(symbolicLink);
+	switch (source)
+	{
+	case CES::CameraSource::Camera:
+		_cameraSource = std::move(device);
+		break;
+	case CES::CameraSource::Scanner:
+		_scannerSource = std::move(device);
+		break;
+	default:
+		break;
 	}
 }
 
 std::vector<CameraDeviceInfo> CES::CameraPipeline::EnumerateDevices()
 {
-	ComPtr<IMFAttributes> attributes;
-	ThrowIfFailed(MFCreateAttributes(&attributes, 1));
-
-	ThrowIfFailed(attributes->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID));
-
-	unique_cotaskmem_arr<ComPtr<IMFActivate>> activators;
-	UINT32 count;
-	ThrowIfFailed(MFEnumDeviceSources(attributes.Get(), reinterpret_cast<IMFActivate***>(&activators._Myptr()), &count));
-	
-	std::vector<CameraDeviceInfo> result;
-	result.reserve(count);
-	for (size_t i = 0; i < count; i++)
+	try
 	{
-		auto& activator = activators[i];
-		unique_cotaskmem_arr<WCHAR> name; UINT32 nameLen;
-		ThrowIfFailed(activator->GetAllocatedString(MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, &name._Myptr(), &nameLen));
-		unique_cotaskmem_arr<WCHAR> link; UINT32 linkLen;
-		ThrowIfFailed(activator->GetAllocatedString(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, &link._Myptr(), &linkLen));
-		result.emplace_back(CameraDeviceInfo{ name.get(), link.get(), std::move(activator)});
+		ComPtr<ICreateDevEnum> devEnum;
+		ThrowIfFailed(CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&devEnum)));
+		ComPtr<IEnumMoniker> enumMoniker;
+		ThrowIfFailed(devEnum->CreateClassEnumerator(CLSID_VideoInputDeviceCategory, &enumMoniker, 0));
+
+		std::vector<CameraDeviceInfo> result;
+		ComPtr<IMoniker> moniker;
+		while (enumMoniker->Next(1, &moniker, nullptr) == S_OK)
+		{
+			ComPtr<IPropertyBag> propertyBag;
+			if (SUCCEEDED((moniker->BindToStorage(nullptr, nullptr, IID_PPV_ARGS(&propertyBag)))))
+			{
+				variant_t friendlyName, devicePath;
+				if (SUCCEEDED((propertyBag->Read(L"FriendlyName", &friendlyName, nullptr))) &&
+					SUCCEEDED((propertyBag->Read(L"DevicePath", &devicePath, nullptr))))
+				{
+					result.emplace_back(CameraDeviceInfo{ friendlyName.bstrVal, devicePath.bstrVal });
+				}
+			}
+		}
+		return result;
 	}
-	return result;
+	REPORT_ERROR(L"EnumerateDevices");
 }
 
 void CameraPipeline::CreateDeviceDependentResources()
@@ -235,100 +172,30 @@ void CameraPipeline::CreateDeviceIndependentResources()
 
 }
 
-void CameraPipeline::CreateSession()
+void CameraPipeline::CreateGraph(ICaptureGraphBuilder2** captureGraphBuilder, IGraphBuilder** graph, IBaseFilter** vmrFilter)
 {
-	ThrowIfFailed(MFCreateMediaSession(nullptr, &_mediaSession));
+	ThrowIfFailed(CoCreateInstance(CLSID_CaptureGraphBuilder2, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(captureGraphBuilder)));
+	ThrowIfFailed(CoCreateInstance(CLSID_FilterGraph, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(graph)));
+	ThrowIfFailed((*captureGraphBuilder)->SetFiltergraph(*graph));
 
-	_mediaSessionAsyncCallback = Make<NS_MEDIA::MFAsyncCallbackWithWeakRef<CameraPipeline>>(GetWeakContext(), &CameraPipeline::OnMediaSessionEvent);
-	ThrowIfFailed(_mediaSession->BeginGetEvent(_mediaSessionAsyncCallback.Get(), nullptr));
+	ThrowIfFailed(CoCreateInstance(CLSID_VideoMixingRenderer9, nullptr, CLSCTX_INPROC, IID_PPV_ARGS(vmrFilter)));
 }
 
-namespace
+void CameraPipeline::ConfigureGraph(ICaptureGraphBuilder2* captureGraphBuilder, IGraphBuilder* graph, IBaseFilter* source, IBaseFilter* vmrFilter, HWND videohWnd, IVMRWindowlessControl9** videoControl)
 {
-	void AddSourceNode(IMFTopology * topology, IMFMediaSource * source, IMFPresentationDescriptor* pd, IMFStreamDescriptor* streamDesc, IMFTopologyNode** node)
+	ThrowIfFailed(graph->AddFilter(source, L"Video Capture Filter"));
+	ThrowIfFailed(graph->AddFilter(vmrFilter, L"Video Renderer Filter"));
+
 	{
-		ComPtr<IMFTopologyNode> sourceNode;
-		ThrowIfFailed(MFCreateTopologyNode(MF_TOPOLOGY_SOURCESTREAM_NODE, &sourceNode));
-		ThrowIfFailed(sourceNode->SetUnknown(MF_TOPONODE_SOURCE, source));
-		ThrowIfFailed(sourceNode->SetUnknown(MF_TOPONODE_PRESENTATION_DESCRIPTOR, pd));
-		ThrowIfFailed(sourceNode->SetUnknown(MF_TOPONODE_STREAM_DESCRIPTOR, streamDesc));
-		ThrowIfFailed(topology->AddNode(sourceNode.Get()));
-		*node = sourceNode.Detach();
+		ComPtr<IVMRFilterConfig9> vmrConfig;
+		ThrowIfFailed(vmrFilter->QueryInterface(IID_PPV_ARGS(&vmrConfig)));
+		ThrowIfFailed(vmrConfig->SetRenderingMode(VMRMode_Windowless));
+		ThrowIfFailed(vmrFilter->QueryInterface(IID_PPV_ARGS(videoControl)));
+		ThrowIfFailed((*videoControl)->SetVideoClippingWindow(videohWnd));
+
+		RECT rect;
+		ThrowWin32IfNot(GetClientRect(videohWnd, &rect));
+		ThrowWin32IfNot((*videoControl)->SetVideoPosition(nullptr, &rect));
 	}
-
-	void AddOutputNode(IMFTopology * topology, IMFActivate * sinkActivate, DWORD streamId, IMFTopologyNode** node)
-	{
-		ComPtr<IMFTopologyNode> outputNode;
-		ThrowIfFailed(MFCreateTopologyNode(MF_TOPOLOGY_OUTPUT_NODE, &outputNode));
-		ThrowIfFailed(outputNode->SetObject(sinkActivate));
-		ThrowIfFailed(outputNode->SetUINT32(MF_TOPONODE_STREAMID, streamId));
-		ThrowIfFailed(outputNode->SetUINT32(MF_TOPONODE_NOSHUTDOWN_ON_REMOVE, FALSE));
-		ThrowIfFailed(topology->AddNode(outputNode.Get()));
-		*node = outputNode.Detach();
-	}
-
-	void AddTransformNode(IMFTopology * topology, const CLSID& clsid, IMFTopologyNode** node)
-	{
-		ComPtr<IMFTopologyNode> transformNode;
-		ThrowIfFailed(MFCreateTopologyNode(MF_TOPOLOGY_TRANSFORM_NODE, &transformNode));
-		ThrowIfFailed(transformNode->SetGUID(MF_TOPONODE_TRANSFORM_OBJECTID, clsid));
-		ThrowIfFailed(topology->AddNode(transformNode.Get()));
-		*node = transformNode.Detach();
-	}
-
-	void AddTransformNode(IMFTopology * topology, IMFTransform* transform, IMFTopologyNode** node)
-	{
-		ComPtr<IMFTopologyNode> transformNode;
-		ThrowIfFailed(MFCreateTopologyNode(MF_TOPOLOGY_TRANSFORM_NODE, &transformNode));
-		ThrowIfFailed(transformNode->SetObject(transform));
-		ThrowIfFailed(topology->AddNode(transformNode.Get()));
-		*node = transformNode.Detach();
-	}
-
-	bool CreateMediaSinkActivator(IMFStreamDescriptor* streamDesc, HWND hWnd, IMFActivate** activate)
-	{
-		ComPtr<IMFMediaTypeHandler> mtHandler;
-		ThrowIfFailed(streamDesc->GetMediaTypeHandler(&mtHandler));
-
-		GUID majorType;
-		ThrowIfFailed(mtHandler->GetMajorType(&majorType));
-		ComPtr<IMFMediaType> mediaType;
-		if (majorType == MFMediaType_Video)
-		{
-			ThrowIfFailed(MFCreateVideoRendererActivate(hWnd, activate));
-			return true;
-		}
-		return false;
-	}
-}
-
-void CameraPipeline::ConfigureTopology(IMFTopology * topology, IMFMediaSource * source, HWND videohWnd)
-{
-	ComPtr<IMFPresentationDescriptor> pd;
-	ThrowIfFailed(source->CreatePresentationDescriptor(&pd));
-
-	DWORD streamDescCount;
-	ThrowIfFailed(pd->GetStreamDescriptorCount(&streamDescCount));
-	for (DWORD i = 0; i < streamDescCount; i++)
-		AddBranchToPartialTopology(topology, source, pd.Get(), i, videohWnd);
-}
-
-void CameraPipeline::AddBranchToPartialTopology(IMFTopology * topology, IMFMediaSource * source, IMFPresentationDescriptor* pd, DWORD streamId, HWND hWnd)
-{
-	BOOL isSelected;
-	ComPtr<IMFStreamDescriptor> streamDesc;
-	ThrowIfFailed(pd->GetStreamDescriptorByIndex(streamId, &isSelected, &streamDesc));
-	if (isSelected)
-	{
-		ComPtr<IMFActivate> sinkActivate;
-		if (CreateMediaSinkActivator(streamDesc.Get(), hWnd, &sinkActivate))
-		{
-			ComPtr<IMFTopologyNode> sourceNode;
-			AddSourceNode(topology, source, pd, streamDesc.Get(), &sourceNode);
-
-			ComPtr<IMFTopologyNode> outputNode;
-			AddOutputNode(topology, sinkActivate.Get(), streamId, &outputNode);
-			ThrowIfFailed(sourceNode->ConnectOutput(0, outputNode.Get(), 0));
-		}
-	}
+	ThrowIfFailed(captureGraphBuilder->RenderStream(&PIN_CATEGORY_CAPTURE, &MEDIATYPE_Video, source, nullptr, vmrFilter));
 }
