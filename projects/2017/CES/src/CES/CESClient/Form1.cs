@@ -14,6 +14,7 @@ namespace CESClient
         public Form1()
         {
             InitializeComponent();
+            ax_CES.InitializeBusiness(0, "123", "123", 1, true, @"[{ ""一级档案"": [""身份证"", ""人像"", ""申请书""] }, { ""二级档案"": [""放款文件"", ""其它申请资料""] }]", "192.168.0.1", "TEST.FOO");
         }
 
         bool _isScanning = false;

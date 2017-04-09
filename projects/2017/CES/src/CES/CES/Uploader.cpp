@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <sstream>
 #include <activemq/core/ActiveMQConnectionFactory.h>
+#include <activemq/library/ActiveMQCPP.h>
 #include <Tomato.Core/encoding.h>
 using namespace WRL;
 using namespace CES;
@@ -65,6 +66,7 @@ namespace
 
 Uploader::Uploader()
 {
+	activemq::library::ActiveMQCPP::initializeLibrary();
 }
 
 namespace
@@ -101,26 +103,34 @@ namespace
 
 void CES::Uploader::Initialize(std::wstring_view ip, uint16_t port, std::wstring_view destUri, bool useTopic)
 {
-	std::wstringstream brokerUri;
-	brokerUri << L"tcp://" << ip << L':' << port <<
-		        L"?wireFormat=openwire"
-		        L"&connection.useAsyncSend=true"
-		//        L"&transport.commandTracingEnabled=true"
-		//        L"&transport.tcpTracingEnabled=true"
-		        L"&wireFormat.tightEncodingEnabled=true"
-		;
-	const auto brokerUriStr = NS_CORE::ws2s(brokerUri.str(), CP_ACP);
-	ActiveMQConnectionFactory connFactory(brokerUriStr);
-	_mqConnection.reset(connFactory.createConnection());
-	_mqSession.reset(_mqConnection->createSession(cms::Session::AcknowledgeMode::AUTO_ACKNOWLEDGE));
+	try
+	{
+		std::wstringstream brokerUri;
+		brokerUri << L"tcp://" << ip << L':' << port <<
+			L"?wireFormat=openwire"
+			L"&connection.useAsyncSend=true"
+			//        L"&transport.commandTracingEnabled=true"
+			//        L"&transport.tcpTracingEnabled=true"
+			L"&wireFormat.tightEncodingEnabled=true"
+			;
+		const auto brokerUriStr = NS_CORE::ws2s(brokerUri.str(), CP_ACP);
+		ActiveMQConnectionFactory connFactory(brokerUriStr);
+		_mqConnection.reset(connFactory.createConnection());
+		_mqSession.reset(_mqConnection->createSession(cms::Session::AcknowledgeMode::AUTO_ACKNOWLEDGE));
 
-	const auto nameUri = NS_CORE::ws2s(destUri, CP_ACP);
-	if (useTopic)
-		_mqDestination.reset(_mqSession->createTopic(nameUri));
-	else
-		_mqDestination.reset(_mqSession->createQueue(nameUri));
-	_mqProducer.reset(_mqSession->createProducer(_mqDestination.get()));
-	_mqProducer->setDeliveryMode(cms::DeliveryMode::NON_PERSISTENT);
+		const auto nameUri = NS_CORE::ws2s(destUri, CP_ACP);
+		if (useTopic)
+			_mqDestination.reset(_mqSession->createTopic(nameUri));
+		else
+			_mqDestination.reset(_mqSession->createQueue(nameUri));
+		_mqProducer.reset(_mqSession->createProducer(_mqDestination.get()));
+		_mqProducer->setDeliveryMode(cms::DeliveryMode::NON_PERSISTENT);
+	}
+	catch (cms::CMSException& ex)
+	{
+		MessageBoxA(nullptr, ex.what(), nullptr, MB_OK | MB_ICONERROR);
+		throw;
+	}
 }
 
 void Uploader::Upload(IStream * imageStream, std::wstring && fileName)

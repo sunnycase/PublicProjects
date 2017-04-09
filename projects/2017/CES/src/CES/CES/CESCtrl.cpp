@@ -321,9 +321,9 @@ void CCESCtrl::InitializeBusiness(USHORT busType, LPCTSTR seqId, LPCTSTR workflo
 	try
 	{
 		_imageStorage.Initialize(storageType == 0 ? workflowId : seqId, categories);
+		_uploader.Initialize(uploadIp, 61616, uploadUri, false);
 	}
 	REPORT_ERROR(L"InitializeBusiness");
-	//_uploader.Initialize(uploadIp, 61616, uploadUri, false);
 }
 
 
