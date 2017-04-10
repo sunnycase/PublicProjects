@@ -38,7 +38,7 @@ namespace CESClient
         private void bn_SetOptions_Click(object sender, EventArgs e)
         {
             ax_CES.ShowPropertyPages();
-            ax_CES.SetScanToPath(@"\人像");
+            ax_CES.SetScanToPath(@"\xx");
         }
     }
 }

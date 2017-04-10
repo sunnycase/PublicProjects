@@ -14,7 +14,7 @@ public:
 	CImageBox();
 	virtual ~CImageBox();
 
-	void SetPicture(HBITMAP bitmap);
+	void SetPicture(HBITMAP bitmap, bool grayscale);
 	void SetPicture(std::wstring_view fileName);
 	void SetZoom(float factor);
 	void Rotate(uint32_t degree);
@@ -31,6 +31,7 @@ private:
 	WRL::ComPtr<ID2D1Factory> _d2dFactory;
 	WRL::ComPtr<ID2D1HwndRenderTarget> _renderTarget;
 	WRL::ComPtr<ID2D1SolidColorBrush> _brush;
+	WRL::ComPtr<IWICPalette> _grayPalette;
 	WRL::ComPtr<ID2D1Bitmap> _bitmap;
 	WRL::ComPtr<IWICImagingFactory> _wicFactory;
 	WRL::ComPtr<IWICBitmapSource> _origWicBitmap;

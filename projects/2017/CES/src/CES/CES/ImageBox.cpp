@@ -32,7 +32,7 @@ END_MESSAGE_MAP()
 
 // CImageBox 消息处理程序
 
-void CImageBox::SetPicture(HBITMAP bitmap)
+void CImageBox::SetPicture(HBITMAP bitmap, bool grayscale)
 {
 	if (bitmap)
 	{
@@ -43,7 +43,16 @@ void CImageBox::SetPicture(HBITMAP bitmap)
 		ThrowIfFailed(_wicFactory->CreateBitmapFlipRotator(&flipRotator));
 		ThrowIfFailed(flipRotator->Initialize(wicBitmap.Get(), WICBitmapTransformFlipVertical));
 
-		_origWicBitmap = flipRotator;
+		if (grayscale)
+		{
+			ComPtr<IWICFormatConverter> formatConverter;
+			ThrowIfFailed(_wicFactory->CreateFormatConverter(&formatConverter));
+			ThrowIfFailed(formatConverter->Initialize(flipRotator.Get(), GUID_WICPixelFormat8bppGray, WICBitmapDitherTypeErrorDiffusion,
+				_grayPalette.Get(), 0.f, WICBitmapPaletteTypeFixedGray256));
+			_origWicBitmap = formatConverter;
+		}
+		else
+			_origWicBitmap = flipRotator;
 	}
 	else
 	{
@@ -81,18 +90,8 @@ void CImageBox::SetPicture(std::wstring_view fileName)
 		ThrowIfFailed(_wicFactory->CreateDecoderFromFilename(fileName.data(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &decoder));
 		ComPtr<IWICBitmapFrameDecode> frame;
 		ThrowIfFailed(decoder->GetFrame(0, &frame));
-
-		WICPixelFormatGUID format;
-		ThrowIfFailed(frame->GetPixelFormat(&format));
-		if (_supportedWicFormats.find(format) != _supportedWicFormats.end())
-			_origWicBitmap = frame;
-		else
-		{
-			ComPtr<IWICFormatConverter> converter;
-			ThrowIfFailed(_wicFactory->CreateFormatConverter(&converter));
-			ThrowIfFailed(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.f, WICBitmapPaletteTypeMedianCut));
-			_origWicBitmap = converter;
-		}
+		
+		_origWicBitmap = frame;
 	}
 	else
 	{
@@ -163,7 +162,8 @@ namespace
 		ComPtr<IPropertyBag2> encodeOptions;
 		ThrowIfFailed(encoder->CreateNewFrame(&frameEncode, &encodeOptions));
 		ThrowIfFailed(frameEncode->Initialize(encodeOptions.Get()));
-		auto pixelFormat = GUID_WICPixelFormat24bppBGR;
+		GUID pixelFormat;
+		ThrowIfFailed(source->GetPixelFormat(&pixelFormat));
 		ThrowIfFailed(frameEncode->SetPixelFormat(&pixelFormat));
 		if (source)
 		{
@@ -182,6 +182,7 @@ void CImageBox::SaveAs(std::wstring_view fileName)
 	ComPtr<IWICStream> stream;
 	ThrowIfFailed(_wicFactory->CreateStream(&stream));
 	ThrowIfFailed(stream->InitializeFromFilename(fileName.data(), GENERIC_WRITE));
+
 	Save(_wicFactory.Get(), stream.Get(), _origWicBitmap.Get());
 }
 
@@ -209,6 +210,9 @@ void CImageBox::CreateDeviceDependentResources()
 			GetSafeHwnd(),
 			D2D1::SizeU(rect.right - rect.left, rect.bottom - rect.top)), &_renderTarget));
 	ThrowIfFailed(_renderTarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Yellow), &_brush));
+
+	ThrowIfFailed(_wicFactory->CreatePalette(&_grayPalette));
+	ThrowIfFailed(_grayPalette->InitializePredefined(WICBitmapPaletteTypeFixedGray256, FALSE));
 }
 
 void CImageBox::UpdateScrollSizes()
@@ -230,13 +234,28 @@ void CImageBox::UpdateBitmap()
 {
 	if (_origWicBitmap)
 	{
-		ComPtr<IWICBitmapFlipRotator> flipRotator;
-		ThrowIfFailed(_wicFactory->CreateBitmapFlipRotator(&flipRotator));
-		ThrowIfFailed(flipRotator->Initialize(_origWicBitmap.Get(), _rotation));
+		ComPtr<IWICBitmapSource> sourceBitmap;
+		{
+			ComPtr<IWICBitmapFlipRotator> flipRotator;
+			ThrowIfFailed(_wicFactory->CreateBitmapFlipRotator(&flipRotator));
+			ThrowIfFailed(flipRotator->Initialize(_origWicBitmap.Get(), _rotation));
+
+			WICPixelFormatGUID format;
+			ThrowIfFailed(flipRotator->GetPixelFormat(&format));
+			if (_supportedWicFormats.find(format) != _supportedWicFormats.end())
+				sourceBitmap = flipRotator;
+			else
+			{
+				ComPtr<IWICFormatConverter> converter;
+				ThrowIfFailed(_wicFactory->CreateFormatConverter(&converter));
+				ThrowIfFailed(converter->Initialize(flipRotator.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.f, WICBitmapPaletteTypeMedianCut));
+				sourceBitmap = converter;
+			}
+		}
 
 		ComPtr<ID2D1Bitmap> d2dBitmap;
-		ThrowIfFailed(_renderTarget->CreateBitmapFromWicBitmap(flipRotator.Get(), &d2dBitmap));
-		_wicBitmap = flipRotator;
+		ThrowIfFailed(_renderTarget->CreateBitmapFromWicBitmap(sourceBitmap.Get(), &d2dBitmap));
+		_wicBitmap = sourceBitmap;
 		_bitmap = d2dBitmap;
 	}
 	else

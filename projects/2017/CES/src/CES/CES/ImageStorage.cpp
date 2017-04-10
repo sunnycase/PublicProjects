@@ -125,17 +125,17 @@ std::wstring CES::ImageStorage::GetNextAvailableFileName() const
 	SYSTEMTIME time;
 	GetLocalTime(&time);
 	std::wstringstream ss;
-	ss << time.wYear << std::setfill(L'0') << std::setw(2)
-		<< time.wMonth << time.wDay;
-	auto prefix = ss.str();
+	ss << std::setfill(L'0') << std::setw(2)
+		<< time.wHour << time.wMinute << time.wSecond;
+	auto surfix = ss.str();
 	fs::path path;
-	size_t i = 0;
+	size_t i = 1;
 	do
 	{
 		path = _selectedPath;
 		std::wstringstream ss;
-		ss << L'_' << i++ << L".jpg";
-		if (!fs::exists(path.append(prefix + ss.str())))
+		ss << std::setfill(L'0') << std::setw(4) << i++ << L'_' << surfix << L".jpg";
+		if (!fs::exists(path.append(ss.str())))
 			break;
 	} while (true);
 	return path;
