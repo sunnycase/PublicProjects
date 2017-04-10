@@ -321,7 +321,7 @@ void CCESCtrl::InitializeBusiness(USHORT busType, LPCTSTR seqId, LPCTSTR workflo
 	try
 	{
 		_imageStorage.Initialize(storageType == 0 ? workflowId : seqId, categories);
-		//_uploader.Initialize(uploadIp, 61616, uploadUri, false);
+		_uploader.Initialize(uploadIp, 61616, uploadUri, false);
 	}
 	REPORT_ERROR(L"InitializeBusiness");
 }
@@ -367,8 +367,8 @@ void CCESCtrl::UploadCurrentPicture()
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
 
 	auto stream = _imageWnd.SaveToStream();
-	MessageBox(L"上传成功。", nullptr, MB_OK | MB_ICONINFORMATION);
-	//_uploader.Upload(stream.Get(), std::experimental::filesystem::path(_currentPictureFileName));
+	//MessageBox(L"上传成功。", nullptr, MB_OK | MB_ICONINFORMATION);
+	_uploader.Upload(stream.Get(), std::experimental::filesystem::path(_currentPictureFileName));
 }
 
 

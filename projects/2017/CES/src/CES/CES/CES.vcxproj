@@ -113,7 +113,7 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;activemq-cpp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;activemq-cppd.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
@@ -145,7 +145,7 @@
       <ModuleDefinitionFile>.\CES.def</ModuleDefinitionFile>
       <OutputFile>$(OutDir)$(ProjectName).ocx</OutputFile>
       <RegisterOutput>false</RegisterOutput>
-      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;activemq-cpp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Mf.lib;mfuuid.lib;Mfplat.lib;Strmiids.lib;d3d9.lib;dxguid.lib;d2d1.lib;evr.lib;minizip.lib;zlib.lib;aes.lib;activemq-cppd.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <IgnoreSpecificDefaultLibraries>msvcrt.lib</IgnoreSpecificDefaultLibraries>
     </Link>
